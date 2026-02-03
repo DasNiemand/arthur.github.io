@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <link rel="stylesheet" href="page_b.css" />
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Card Display B - Independent Style</title>
+    </head>
+    <body>
+        <div class="backgroundhover"></div>
+        <video id="backgroundVideo" loop muted autoplay playsinline>
+            <source src="bg.mp4" type="video/mp4" />
+        </video>
+        <div class="content">
+            <div class="toggle-btn" id="menu-toggle"></div>
+
+            <nav class="navigation" id="navigation">
+                <ul>
+                    <div class="navbar">
+                        <li><a href="index.html" id="page1"></a></li>
+                        <li><a href="page_b.html" id="page2"></a></li>
+                        <li><a href="page_c.html" id="page3"></a></li>
+                        <li><a href="page_d.html" id="page4"></a></li>
+                    </div>
+                </ul>
+                <li>
+                    <a href="#" id="download-cards-btn"></a>
+                </li>
+                <li>
+                    <a href="#" id="upload-cards-trigger"></a>
+                    <input type="file" id="upload-cards-input" accept=".json" style="display: none;">
+                </li>
+                <ul>
+                    <div class="setting"></div>
+                </ul>
+            </nav>
+        </div>
+
+        <div id="source-card-container">
+            <a href="#" id="source-add-card-btn" class="card2 add-new-card-source">
+            </a>
+        </div>
+
+        <div id="card-wrapper"></div>
+        <script src="page_b.js"></script>
+    </body>
+</html>

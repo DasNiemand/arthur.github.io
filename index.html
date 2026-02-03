@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Arthur Websites</title>
+  <link rel="stylesheet" href="mainstyle.css" />
+  <link
+    rel="icon"
+    href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 60 100%22><text y=%22.9em%22 font-size=%2290%22 fill=%22white%22>Ω</text></svg>"
+    type="image/svg+xml">
+ </head>
+
+ <div class="header2"></div>
+ <body>
+    <div class="backgroundhover"></div>
+  <video id="backgroundVideo" loop muted autoplay playsinline>
+    <source src="bg.mp4" type="video/mp4">
+  </video>
+  <div id="imageOverlay" class="image-overlay"></div> <div class="content">
+    </div>
+  <div class="content">
+    <div class="toggle-btn" id="menu-toggle"></div>
+
+    <nav class="navigation" id="navigation">
+      <ul>
+        <div class="navbar">
+          <li><a href="index.html" id="page1"></a></li>
+          <li><a href="page_b.html" id="page2"></a></li>
+          <li><a href="page_c.html" id="page3"></a></li>
+          <li><a href="page_d.html" id="page4"></a></li>
+        </div>
+      </ul>
+      <li>
+        <a href="#" id="download-cards-btn"></a>
+      </li>
+      <li>
+        <a href="#" id="upload-cards-trigger"></a>
+        <input type="file" id="upload-cards-input" accept=".json" style="display: none;">
+      </li>
+      <ul>
+        <div class="setting"></div>
+      </ul>
+    </nav>
+  </div>
+
+  <div id="main-content-area">
+    <div class="card-container"> 
+      <div id="card-wrapper">
+        <a id="add-new-card" class="card add-new-card"></a>
+      </div>
+    </div>
+  </div>
+ </body>
+  <div id="url-modal" class="modal-overlay modal-hidden">
+    <div class="modal-content card">
+      <h3 class="modal-header">Thêm Website Mới</h3>
+      <input type="url" id="modal-url-input" placeholder="" required>
+      <button id="modal-add-btn" class="modal-add-btn">Thêm</button>
+    </div>
+  </div>
+  
+  <script src="mainscript.js"></script>
+</html>

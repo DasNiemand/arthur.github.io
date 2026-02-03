@@ -1,0 +1,432 @@
+html,
+body {
+    /* QUAN TRỌNG: Ngăn chặn thanh cuộn ngang/dọc */
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+    background-color: #111111;
+}
+
+#backgroundVideo {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    min-width: 100%;
+    min-height: 100%;
+    background-color: #111111;
+    z-index: 0;
+    filter: brightness(25%);
+    transition: 0.5s ease-in-out;
+}
+
+.content {
+    text-transform: uppercase;
+    font-family: 'Courier New';
+    z-index: 9999;
+}
+
+/* --- Toggle Button (Nút Bật/Tắt Menu) --- */
+
+.toggle-btn {
+    position: fixed;
+    top: 15px;
+    left: -15px;
+    opacity: 65%;
+    background-image: url('logo.png');
+    background-size: contain;
+    width: 150px;
+    height: 150px;
+    z-index: 10001;
+    transition: transform 0.75s ease-in-out, opacity 0.5s;
+    display: inline-block;
+    animation: hover-float 4s ease-in-out infinite;
+}
+
+.toggle-btn:hover {
+    cursor: pointer;
+    animation-play-state: paused;
+    transform: translateY(-15px) rotateZ(-3deg) scale(1.05);
+    opacity: 100%;
+}
+
+@keyframes hover-float {
+    0% {
+        transform: translateY(-30px);
+    }
+
+    50% {
+        transform: translateY(-40px) rotateZ(1deg);
+    }
+
+    100% {
+        transform: translateY(-30px);
+    }
+}
+
+/* --- Navigation & Menu --- */
+
+.navigation {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 70px;
+    height: 100%;
+    background: rgba(22, 22, 22, 0.534);
+    padding-top: 5px;
+    /* Giảm padding */
+    padding-left: 20px;
+    z-index: 10000;
+    transition: transform 0.5s ease-in-out;
+}
+
+.nav-hidden {
+    transform: translateX(-100%);
+}
+
+.navigation ul {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+.navigation ul li {
+    margin: 0;
+    height: 30px;
+}
+
+.navigation ul li a {
+    filter: invert(65%);
+    width: 20px;
+    height: 20px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    display: inline-block !important;
+    text-indent: -9999px;
+    padding: 0;
+    position: relative;
+    top: 5px;
+    left: -5px;
+    transition: 0.25s ease-in-out;
+    z-index: 3;
+    text-decoration: none;
+    color: transparent;
+}
+
+.navigation ul li a:hover {
+    filter: invert(85%);
+    transform: scale(1.15) translateY(-2.5px);
+}
+
+.navbar {
+    font-size: 20px;
+    padding-top: 285px;
+    padding-left: 13.5px;
+    /* Vị trí bắt đầu của các nút page */
+    text-transform: uppercase;
+    font-family: 'Courier New';
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+/* Định nghĩa từng icon theo ID (Đảm bảo các file ảnh tồn tại) */
+#page1 {
+    background-image: url('bookmark.png');
+    position: static;
+    left: 0;
+    top: 0;
+}
+
+#page2 {
+    background-image: url('book-x.png');
+    position: static;
+    left: 0;
+    top: 0;
+}
+
+#page3 {
+    background-image: url('book-x.png');
+    position: static;
+    left: 0;
+    top: 0;
+}
+
+#page4 {
+    background-image: url('book-x.png');
+    position: static;
+    left: 0;
+    top: 0;
+}
+#download-cards-btn {
+    filter: invert(65%);
+    width: 20px;
+    height: 20px;
+    background-image: url('download.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    display: inline-block !important;
+    text-indent: -9999px;
+    padding: 0;
+    position: relative;
+    top: 240px;
+    left: -8px;
+    transition: 0.25s ease-in-out;
+    z-index: 3;
+}
+
+#download-cards-btn:hover {
+    filter: invert(85%);
+    transform: scale(1.15) translateY(-2.5px);
+}
+
+#upload-cards-trigger {
+    filter: invert(65%);
+    width: 20px;
+    height: 20px;
+    background-image: url('upload.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    display: inline-block !important;
+    text-indent: -9999px;
+    padding: 0;
+    position: relative;
+    top: 280px;
+    left: -8px;
+    transition: 0.25s ease-in-out;
+    z-index: 3;
+}
+
+#upload-cards-trigger:hover {
+    filter: invert(85%);
+    transform: scale(1.15) translateY(-2.5px);
+}
+
+
+.setting {
+    filter: invert(65%);
+    width: 30px;
+    height: 30px;
+    background-image: url('settings.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    display: inline-block !important;
+    text-indent: -9999px;
+    padding: 0;
+    position: relative;
+    top: 300px;
+    /* Vị trí Setting */
+    left: 7.5px;
+    transition: 0.75s ease-in-out;
+    z-index: 3;
+}
+
+.setting:hover {
+    cursor: pointer;
+    filter: invert(85%);
+    transform: scale(1.15) translateY(-2.5px) rotate(360deg);
+}
+
+/* --- CONTAINER THẺ GỐC (Source Card) --- */
+#source-card-container {
+    position: absolute;
+    top: 85px;
+    left: 100px;
+    z-index: 20;
+    width: 225px;
+    height: 325px;
+    margin: 0px;
+    padding: 0px;
+
+    background-image: url(maincard.png);
+    background-size: cover;
+    color: #ffffff;
+    text-decoration: none;
+    box-shadow: rgba(0, 0, 0, 100) 0px 5px 25px;
+    border-radius: 25px;
+    transform-style: preserve-3d;
+}
+
+/* Style cho NÚT THÊM THẺ MỚI (ở vị trí Thẻ Gốc) */
+.card2.add-new-card-source {
+    width: 225px;
+    height: 325px;
+    margin: 0;
+    background-color: #ffffff1a;
+    border: 3px dashed #ffffff33;
+    border-radius: 25px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #ffffff55;
+    font-size: 24px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+}
+
+.card2.add-new-card-source:hover {
+    background-color: #ffffff33;
+    color: #ffffff88;
+    border-color: #ffffff88;
+    transform: scale(1.02);
+}
+
+/* --- LAYOUT CONTAINER (Các thẻ bị chia) --- */
+#card-wrapper {
+    position: absolute;
+    top: 50px;
+    left: 550px; /* ĐÃ CHỈNH SỬA: Dịch sang phải */
+
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+
+    /* Cập nhật max-width theo left mới (550px) */
+    max-width: calc(100vw - 550px); 
+
+    margin: 0;
+    padding-top: 50px;
+    z-index: 10;
+    height: auto !important;
+    overflow: visible;
+}
+
+/* --- .card2: STYLE THẺ CHÍNH --- */
+.card2 {
+    width: 225px;
+    height: 325px;
+    margin: 15px;
+    padding: 5px;
+
+    background-image: none;
+    background-color: #0d0d0d88;
+    background-size: cover;
+    color: #ffffff;
+    text-decoration: none;
+    box-shadow: rgba(0, 0, 0, 100) 0px 5px 25px;
+    border-radius: 25px;
+
+    position: relative;
+    transform-style: preserve-3d;
+
+    transition: none;
+}
+
+.card2.is-new {
+    opacity: 0;
+    transform: scale(0.8);
+    animation: fadeInScale 0.5s ease-out forwards;
+}
+
+@keyframes fadeInScale {
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* --- TRẠNG THÁI HIỆU ỨNG CHIA BÀI --- */
+.card2.collecting {
+    position: absolute !important;
+    z-index: 99;
+    transform: none !important;
+    margin: 0 !important;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    transition: none;
+}
+
+/* HIỆU ỨNG HOVER */
+.card2:hover {
+    cursor: pointer;
+    transform: translateY(-10px) skew(-0.5deg, -0.5deg);
+    filter: invert(100%);
+    background-color: #0d0d0d;
+}
+
+/* --- CÁC THÀNH PHẦN KHÁC TRÊN THẺ --- */
+
+.card2-center-suit {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 150px;
+    height: 150px;
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: 5;
+}
+
+/* Các thành phần chữ */
+.card2-initial-top-left-M {
+    position: absolute;
+    top: 5px;
+    left: 10px;
+    font-size: 40px;
+    font-family: serif;
+    color: #ffffff;
+    z-index: 10;
+}
+
+.card2-initial-bottom-right-M {
+    position: absolute;
+    bottom: 5px;
+    right: 10px;
+    font-size: 40px;
+    font-family: serif;
+    color: #ffffff;
+    z-index: 10;
+    transform: rotate(180deg);
+}
+
+.card2-vertical-text {
+    position: absolute;
+    top: 55px;
+    left: 29.25px;
+    font-size: 10px;
+    font-family: 'Courier New', monospace;
+    color: #ffffff;
+    z-index: 10;
+    transform: rotate(90deg);
+    transform-origin: top left;
+    white-space: nowrap;
+    letter-spacing: 1px;
+}
+
+.card2-vertical-text2 {
+    position: absolute;
+    bottom: 45px;
+    right: -6px;
+    font-size: 10px;
+    font-family: 'Courier New', monospace;
+    color: #ffffff;
+    z-index: 10;
+    transform: rotate(-90deg);
+    transform-origin: top left;
+    white-space: nowrap;
+    letter-spacing: 1px;
+}
+
+.card2-border {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 50%;
+    filter: invert(100%);
+    background-image: url('source/border.png');
+    background-size: 100% 100%;
+    pointer-events: none;
+    z-index: 15;
+}

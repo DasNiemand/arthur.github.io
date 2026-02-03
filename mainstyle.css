@@ -1,0 +1,602 @@
+/* --- Global Styles --- */
+
+html,
+body {
+    height: 100%;
+    margin: 0;
+    position: relative;
+    z-index: 1;
+    overflow-x: hidden;
+    overflow-y: auto;
+    min-height: 100vh;
+}
+
+#backgroundVideo {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    min-width: 100%;
+    min-height: 100%;
+    background-color: #111111;
+    z-index: 0;
+    filter: brightness(25%);
+    transition: 0.5 ease-in-out;
+}
+/* Thêm một lớp phủ CSS mới */
+/* --- Image Overlay --- */
+.image-overlay {
+    /* Đảm bảo position: fixed để chiếm toàn màn hình */
+    position: fixed; 
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    
+    /* Z-index phải cao hơn video (z-index: 0) */
+    z-index: 1; 
+
+    /* Mặc định ẩn và trượt ra ngoài màn hình bên phải */
+    opacity: 0; 
+    transform: translateX(100%); 
+
+    /* --- QUAN TRỌNG: Transition phải được khai báo --- */
+    transition: opacity 0.5s ease-out, transform 0.5s ease-out; 
+}
+
+/* Class khi trượt vào */
+.image-overlay.slide-in {
+    opacity: 1;
+    transform: translateX(0); /* Trượt vào */
+    /* KHÔNG ĐẶT transition TẠI ĐÂY */
+}
+
+/* Class khi trượt ra (optional) */
+.image-overlay.slide-out {
+    opacity: 0;
+    transform: translateX(-100%); /* Trượt ra khỏi màn hình bên trái */
+    /* Class này chủ yếu dùng để kích hoạt animation */
+}
+
+
+.content {
+    text-transform: uppercase;
+    font-family: 'Courier New';
+    z-index: 9999;
+}
+
+/* --- Toggle Button (Nút Bật/Tắt Menu) --- */
+
+.toggle-btn {
+    /* THAY ĐỔI QUAN TRỌNG: Cố định vị trí trên màn hình */
+    position: fixed; 
+    
+    /* Vị trí ban đầu (Điều chỉnh để đặt ở góc trên bên trái) */
+    top: 5px;   
+    left: -15px; /* Đặt ở bên phải thanh navigation (70px + 5px margin) */
+    
+    opacity: 65%;
+    background-image: url('logo.png');
+    background-size: contain;
+    width: 150px;
+    height: 150px;
+    z-index: 10001; /* Đảm bảo nó luôn nằm trên cùng */
+    transition: transform 0.75s ease-in-out, opacity 0.5s;
+    display: inline-block;
+    
+    /* >>> ÁP DỤNG KEYFRAMES CŨ CHO HIỆU ỨNG LƠ LỬNG LIÊN TỤC <<< */
+    animation: hover-float 4s ease-in-out infinite;
+}
+
+.toggle-btn:hover {
+    cursor: pointer;
+    animation-play-state: paused;
+    transform: translateY(-15px) rotateZ(-3deg) scale(1.05);
+    opacity: 100%;
+}
+
+@keyframes hover-float {
+    0% {
+        transform: translateY(-30px);
+        /* Vị trí gốc */
+    }
+
+    50% {
+        transform: translateY(-40px) rotateZ(1deg);
+        /* Dịch chuyển lên 10px và xoay nhẹ */
+    }
+
+    100% {
+        transform: translateY(-30px);
+        /* Trở về vị trí gốc */
+    }
+}
+
+/* --- Navigation & Menu --- */
+
+.navigation {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 70px;
+    height: 100%;
+    background: rgba(22, 22, 22, 0.534);
+    padding-top: 75px;
+    padding-left: 20px;
+    z-index: 10000;
+    transition: transform 0.5s ease-in-out;
+}
+
+.nav-hidden {
+    transform: translateX(-100%);
+}
+
+
+
+.navigation ul {
+    list-style: none;
+    padding: 0;
+}
+
+/* Đặt style cơ bản cho icon giống như .setting */
+.navigation ul li a {
+    /* Đảm bảo chỉ hiển thị icon */
+    filter: invert(65%);
+    width: 20px;
+    height: 20px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    display: inline-block !important;
+    /* Quan trọng: Ghi đè style cũ */
+    text-indent: -9999px;
+    /* Ẩn chữ nếu có */
+    padding: 0;
+    position: relative;
+    top: 5px;
+    /* Điều chỉnh vị trí */
+    left: -5px;
+    transition: 0.25s ease-in-out;
+    z-index: 3;
+
+    /* Xóa các thuộc tính văn bản không cần thiết */
+    text-decoration: none;
+    color: transparent;
+}
+
+/* Hiệu ứng Hover chung cho icon nav */
+.navigation ul li a:hover {
+    filter: invert(85%);
+    transform: scale(1.15) translateY(-2.5px);
+}
+
+/* Định nghĩa từng icon theo ID */
+#page1 {
+    background-image: url('bookmark.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    position: relative;
+    top: 0px;
+    left: 15px;
+}
+
+#page2 {
+    background-image: url('book-x.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    position: relative;
+    top: 40px;
+    left: 15px;
+}
+
+#page3 {
+    background-image: url('book-x.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    position: relative;
+    top: 80px;
+    left: 15px;
+}
+
+#page4 {
+    background-image: url('book-x.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    position: relative;
+    top: 120px;
+    left: 15px;
+}
+
+.navbar {
+    font-size: 20px;
+    padding-top: 250px;
+    text-transform: uppercase;
+    font-family: 'Courier New';
+}
+
+/* --- Card & Card Wrapper --- */
+
+.card-container {
+    padding: 0;
+    display: block;
+    width: 100vw;
+    min-height: 100vh;
+    position: relative;
+}
+
+#card-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    padding-top: 2.1%;
+    padding-left: 20px;
+    position: fixed;
+
+    left: 505px;
+
+    top: 0px;
+
+    height: calc(100vh - 0px - 0px);
+
+    overflow-y: auto;
+    overflow-x: hidden;
+    box-sizing: border-box;
+    z-index: 1;
+
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+#card-wrapper::-webkit-scrollbar {
+    display: none;
+}
+
+.card {
+    width: 225px;
+    height: 325px;
+    padding: 5px;
+    position: relative;
+    background-image: none;
+    background-color: #0d0d0d67;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    color: #ffffff;
+    text-decoration: none;
+    box-shadow: rgba(0, 0, 0, 100) 0px 5px 25px;
+    border-radius: 25px;
+    transition: transform 0.3s ease-in-out, filter 0.3s ease-in-out;
+    transform-style: preserve-3d;
+}
+
+.card:hover {
+    cursor: pointer;
+    transform: translateY(-10px) skew(-0.5deg, -0.5deg);
+    filter: invert(100%);
+    background-color: #0d0d0d;
+    
+    
+}
+
+.card.is-active {
+    transform: translateY(-10px) skew(-0.5deg, -0.5deg);
+    filter: invert(100%);
+}
+
+.card.is-rotated {
+    transform: translateY(-10px) skew(-0.5deg, -0.5deg);
+    filter: invert(100%);
+}
+
+.card.is-dragging {
+    opacity: 0.5;
+}
+
+.card-wrapper.dragging .card:not(.is-dragging):hover {
+    transform: translateY(-5px);
+}
+
+.card-title {
+    position: absolute;
+    top: 27.5%;
+    left: 12.5%;
+    transform: translate(-50%, -50%) rotate(90deg);
+    letter-spacing: 5px;
+    text-align: center;
+    font-size: 15px;
+    font-family: 'Courier New';
+    color: #ffffff;
+    max-width: 27.5%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: rgba(0, 0, 0, 0.8) 0px 5px 10px;
+    display: block !important;
+    z-index: 99999;
+}
+
+.card-title1 {
+    position: absolute;
+    bottom: 22.5%;
+    right: -15%;
+    transform: translate(-50%, -50%) rotate(-90deg);
+    letter-spacing: 5px;
+    text-align: center;
+    font-size: 15px;
+    font-family: 'Courier New';
+    color: #ffffff;
+    max-width: 27.5%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: rgba(0, 0, 0, 0.8) 0px 5px 10px;
+    display: block !important;
+    z-index: 99999;
+}
+
+.card-remove-btn {
+    opacity: 0;
+
+    z-index: 1;
+}
+
+.add-new-card {
+    display: flex;
+    align-items: start;
+    justify-content: start;
+    box-shadow: rgb(255, 255, 255) 0px 0px 5px;
+    background-image: url('maincard.png');
+    background-size: cover;
+    background-position: bottom;
+    background-repeat: no-repeat;
+    filter: saturate(0%) invert(100%);
+    opacity: 25%;
+    position: fixed;
+    top: 40px;
+    left: 160px;
+    z-index: 10000;
+    border: none;
+    padding: 1 !important;
+    transition: 0.25s ease-in-out;
+}
+
+.add-new-card:hover {
+    cursor: pointer;
+    transform: translateY(-10px);
+    filter: invert(0%);
+    opacity: 100%;
+    box-shadow: rgb(255, 255, 255) 0px 0px 10px;
+
+}
+
+.add-new-card .card-title,
+.add-new-card .card-remove-btn,
+.add-new-card .card-center-suit,
+.add-new-card .card-initial {
+    display: none !important;
+}
+
+.card.is-new {
+    animation: card-appear 0.75s ease-in-out;
+}
+
+.card.is-deleting {
+    animation: card-disappear 0.75s ease-in-out;
+}
+
+.card-initial-top-left {
+    position: absolute;
+    top: 5px;
+    left: 15px;
+    font-size: 50px;
+    font-family: 'Courier New';
+    font-weight: 900;
+    font-weight: lighter;
+    color: #ffffff;
+    opacity: 0.9;
+    text-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
+    z-index: 1;
+}
+
+.card-initial-bottom-right {
+    position: absolute;
+    top: 275px;
+    right: 15px;
+    font-size: 50px;
+    font-family: 'Courier New';
+    font-weight: 900;
+    font-weight: lighter;
+    color: #ffffff;
+    transform: rotate(180deg);
+    opacity: 0.9;
+    text-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
+    z-index: 1;
+}
+
+.card-border {
+    background-image: url('border.png');
+    background-position: center;
+    background-repeat: no-repeat;
+    position: relative;
+
+    mix-blend-mode: screen;
+    filter: invert(100%);
+    opacity: 50%;
+    background-size: 105% 105%;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+}
+
+.card-center-suit {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 300px;
+    height: 300px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    opacity: 1;
+    transition: 0.1s ease-in-out;
+    z-index: 100;
+}
+
+.card-center-suit:hover {
+    opacity: 0%;
+}
+
+
+/* --- Modal & Popup --- */
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background-size: 50px 50px;
+    background-color: rgba(0, 0, 0, 0.85);
+    z-index: 99999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 1;
+    transition: opacity 0.3s ease-in-out;
+    overflow-y: hidden;
+}
+
+.modal-hidden {
+    display: none;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.modal-content {
+    width: 250px;
+    height: auto;
+    padding: 20px;
+    position: static;
+    transform: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+
+.modal-header {
+    width: auto;
+    height: auto;
+    font-size: 18px;
+    margin: 0;
+    color: #dadada;
+    letter-spacing: 4px;
+    font-family: monospace;
+    text-transform: uppercase;
+}
+
+#modal-url-input {
+    width: 90%;
+    padding: 10px;
+    border: 1px solid #1a1a1a;
+    background-color: #1a1a1a;
+    color: #c5c5c5;
+    border-radius: 10px;
+    font-family: monospace;
+}
+
+.modal-add-btn {
+    letter-spacing: 4px;
+    font-family: monospace;
+    text-transform: uppercase;
+    padding: 10px 20px;
+    background-color: #161616;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 16px;
+    transition: background-color 0.2s;
+}
+
+.modal-add-btn:hover {
+    background-color: #0c0c0c;
+}
+
+/* --- Download/Upload/Setting Icons --- */
+
+#download-cards-btn {
+    filter: invert(65%);
+    width: 20px;
+    height: 20px;
+    background-image: url('download.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    display: inline-block !important;
+    text-indent: -9999px;
+    padding: 0;
+    position: relative;
+    top: 300px;
+    left: -5px;
+    transition: 0.25s ease-in-out;
+    z-index: 3;
+}
+
+#download-cards-btn:hover {
+    filter: invert(85%);
+    transform: scale(1.15) translateY(-2.5px);
+}
+
+#upload-cards-trigger {
+    filter: invert(65%);
+    width: 20px;
+    height: 20px;
+    background-image: url('upload.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    display: inline-block !important;
+    text-indent: -9999px;
+    padding: 0;
+    position: relative;
+    top: 340px;
+    left: -5px;
+    transition: 0.25s ease-in-out;
+    z-index: 3;
+}
+
+#upload-cards-trigger:hover {
+    filter: invert(85%);
+    transform: scale(1.15) translateY(-2.5px);
+}
+
+.setting {
+    filter: invert(65%);
+    width: 20px;
+    height: 20px;
+    background-image: url('settings.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    display: inline-block !important;
+    text-indent: -9999px;
+    padding: 0;
+    position: relative;
+    top: 370px;
+    left: 15px;
+    transition: 0.75s ease-in-out;
+    z-index: 3;
+}
+
+.setting:hover {
+    cursor: pointer;
+    filter: invert(85%);
+    transform: scale(1.15) translateY(-2.5px) rotate(360deg);
+}
