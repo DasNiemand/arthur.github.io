@@ -1,64 +1,176 @@
 <!DOCTYPE html>
 <html lang="en">
- <head>
+<head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Arthur Websites</title>
-  <link rel="stylesheet" href="mainstyle.css" />
-  <link
-    rel="icon"
+  <link rel="stylesheet" href="mainstyle.css?v=2" />
+  <link rel="icon"
     href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 60 100%22><text y=%22.9em%22 font-size=%2290%22 fill=%22white%22>Ω</text></svg>"
     type="image/svg+xml">
- </head>
+</head>
+<body>
 
- <div class="header2"></div>
- <body>
-    <div class="backgroundhover"></div>
+  <!-- Fade-in overlay -->
+  <div id="page-fade-overlay"></div>
+
+  <div class="backgroundhover"></div>
+
   <video id="backgroundVideo" loop muted autoplay playsinline>
     <source src="bg.mp4" type="video/mp4">
   </video>
-  <div id="imageOverlay" class="image-overlay"></div> <div class="content">
-    </div>
-  <div class="content">
-    <div class="toggle-btn" id="menu-toggle"></div>
 
+  <div id="imageOverlay" class="image-overlay"></div>
+
+  <!-- Navigation -->
+  <div class="content">
     <nav class="navigation" id="navigation">
-      <ul>
-        <div class="navbar">
-          <li><a href="index.html" id="page1"></a></li>
-          <li><a href="page_b.html" id="page2"></a></li>
-          <li><a href="page_c.html" id="page3"></a></li>
-          <li><a href="page_d.html" id="page4"></a></li>
+      <div class="nav-content-wrapper">
+
+        <div class="navbar-top">
+          <ul>
+            <li><a href="#" class="nav-link" data-page="page_a.html" id="page1">Page 1</a></li>
+          </ul>
         </div>
-      </ul>
-      <li>
-        <a href="#" id="download-cards-btn"></a>
-      </li>
-      <li>
-        <a href="#" id="upload-cards-trigger"></a>
-        <input type="file" id="upload-cards-input" accept=".json" style="display: none;">
-      </li>
-      <ul>
-        <div class="setting"></div>
-      </ul>
+
+        <div class="navbar-center">
+          <ul>
+            <li><a href="#" class="nav-link" data-page="page_b.html" id="page2">Page 2</a></li>
+            <li><a href="#" class="nav-link" data-page="page_c.html" id="page3">Page 3</a></li>
+            <li><a href="#" class="nav-link" data-page="page_d.html" id="page4">Page 4</a></li>
+          </ul>
+        </div>
+
+        <div class="navbar-bottom">
+          <ul>
+            <li><a href="#" id="download-cards-btn">Download</a></li>
+            <li><a href="#" id="upload-cards-trigger">Upload</a></li>
+            <li><div class="setting" id="open-settings-btn"></div></li>
+          </ul>
+          <input type="file" id="upload-cards-input" style="display:none" accept=".json">
+        </div>
+
+      </div>
     </nav>
   </div>
 
+  <!-- Main content -->
   <div id="main-content-area">
-    <div class="card-container"> 
+    <div class="card-container">
       <div id="card-wrapper">
         <a id="add-new-card" class="card add-new-card"></a>
       </div>
     </div>
   </div>
- </body>
-  <div id="url-modal" class="modal-overlay modal-hidden">
-    <div class="modal-content card">
-      <h3 class="modal-header">Thêm Website Mới</h3>
-      <input type="url" id="modal-url-input" placeholder="" required>
-      <button id="modal-add-btn" class="modal-add-btn">Thêm</button>
+
+  <!-- URL Add Component -->
+  <div id="url-modal" class="url-input-container url-input-hidden">
+    <div class="input-wrapper">
+      <input id="modal-url-input" placeholder="Enter your URL" class="input" name="text" type="text" />
+      <button id="modal-add-btn" class="Subscribe-btn">Add</button>
     </div>
   </div>
-  
-  <script src="mainscript.js"></script>
+
+  <!-- Settings Panel -->
+  <div id="settings-panel" class="settings-panel settings-panel-hidden">
+    <div class="settings-inner">
+
+      <div class="settings-header">
+        <span class="settings-title">⚙ Cài Đặt</span>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <!-- Delete All Icons Button -->
+          <button aria-label="Delete all icons" class="delete-button" id="delete-all-icons-btn">
+            <svg class="trash-svg" viewBox="0 -10 64 74" xmlns="http://www.w3.org/2000/svg">
+              <g id="trash-can">
+                <rect x="16" y="24" width="32" height="30" rx="3" ry="3" fill="#e74c3c"></rect>
+                <g transform-origin="12 18" id="lid-group">
+                  <rect x="12" y="12" width="40" height="6" rx="2" ry="2" fill="#c0392b"></rect>
+                  <rect x="26" y="8" width="12" height="4" rx="2" ry="2" fill="#c0392b"></rect>
+                </g>
+              </g>
+            </svg>
+          </button>
+          <button id="close-settings-btn" class="settings-close-btn">✕</button>
+        </div>
+      </div>
+
+      <!-- Background -->
+      <div class="settings-section">
+        <div class="settings-section-title">🎬 Nền Video</div>
+        
+        <div class="bg-settings-container" style="display: flex; align-items: flex-start; gap: 30px;">
+          <!-- Background Preview -->
+          <div id="bg-preview-container" class="bg-preview-container" style="flex-shrink: 0; margin: 0;">
+            <div id="bg-preview-overlay" class="bg-preview-overlay"></div>
+            <video id="bg-preview-video" loop muted autoplay playsinline>
+              <source src="bg.mp4" type="video/mp4">
+            </video>
+            <div id="bg-preview-gif" class="bg-preview-gif"></div>
+          </div>
+
+          <div class="bg-controls" style="flex: 1;">
+            <div class="settings-row">
+              <label>Upload Video / GIF mới</label>
+              <button class="settings-btn" id="bg-upload-btn">Chọn File</button>
+              <input type="file" id="bg-upload-input" accept="video/*,image/gif" style="display:none">
+            </div>
+            <div class="settings-row">
+              <label>Độ sáng: <span id="bg-brightness-val">25</span>%</label>
+              <input type="range" id="bg-brightness-slider" min="0" max="100" value="25" class="settings-slider">
+            </div>
+            <div class="settings-row">
+              <label>Tốc độ: <span id="bg-speed-val">0.5</span>x</label>
+              <input type="range" id="bg-speed-slider" min="0.1" max="4" step="0.1" value="0.5" class="settings-slider">
+            </div>
+            <div class="settings-row">
+              <label>Xóa cài đặt nền</label>
+              <button class="settings-btn" id="bg-reset-btn">Đặt lại</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card Icons -->
+      <div class="settings-section">
+        <div class="settings-section-title">🖼 Icon Card (Random Pool)</div>
+        <div class="settings-row">
+          <label>Upload icon cho card mới</label>
+          <div style="display: flex; gap: 5px;">
+            <button class="settings-btn" id="toggle-all-random-btn">Chọn Tất Cả</button>
+            <button class="settings-btn" id="card-icon-upload-btn">Chọn File</button>
+          </div>
+          <input type="file" id="card-icon-upload-input" accept="image/*" multiple style="display:none">
+        </div>
+        <div class="settings-icons-grid" id="card-icons-grid"></div>
+      </div>
+
+      <!-- Main Card Icon -->
+      <div class="settings-section">
+        <div class="settings-section-title">⭐ Icon Card Chính</div>
+        <div class="settings-row">
+          <label>Upload icon cho card chính</label>
+          <div style="display: flex; gap: 5px;">
+            <button class="settings-btn" id="toggle-all-main-btn">Chọn Tất Cả</button>
+            <button class="settings-btn" id="main-card-icon-upload-btn">Chọn File</button>
+          </div>
+          <input type="file" id="main-card-icon-upload-input" accept="image/*" multiple style="display:none">
+        </div>
+        <div class="settings-icons-grid" id="main-card-icons-grid"></div>
+      </div>
+
+      <!-- SFX Settings -->
+      <div class="settings-section">
+        <div class="settings-section-title">🔊 Hiệu ứng âm thanh (SFX)</div>
+        <div class="settings-row">
+          <label>Âm lượng: <span id="sfx-volume-val">50</span>%</label>
+          <input type="range" id="sfx-volume-slider" min="0" max="100" value="50" class="settings-slider">
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="notification-container" class="notification-container"></div>
+  <script src="mainscript.js?v=2"></script>
+</body>
 </html>
