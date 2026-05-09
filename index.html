@@ -10,6 +10,12 @@
     type="image/svg+xml">
 </head>
 <body>
+  <!-- Retro Filter Overlay -->
+  <div id="crt-overlay" style="display: none; pointer-events: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9990;">
+    <div class="crt-scanlines"></div>
+    <div class="dither-overlay" id="dither-overlay"></div>
+    <div class="crt-noise" id="crt-noise"></div>
+  </div>
 
   <!-- Fade-in overlay -->
   <div id="page-fade-overlay"></div>
@@ -21,6 +27,13 @@
   </video>
 
   <div id="imageOverlay" class="image-overlay"></div>
+
+  <div id="draggable-clock" class="draggable-clock">
+    <span id="clock-icon"></span>
+    <span id="clock-time">00:00:00</span>
+    <span id="clock-retro-dot" class="retro-dot">.</span>
+    <span id="clock-ampm" style="font-size: 0.5em; margin-left: 5px;"></span>
+  </div>
 
   <!-- Navigation -->
   <div class="content">
@@ -90,15 +103,21 @@
               </g>
             </svg>
           </button>
-          <button id="close-settings-btn" class="settings-close-btn">✕</button>
+          <button id="close-settings-btn" class="settings-close-btn" style="background: transparent; border: none; font-size: 24px; color: white; cursor: pointer; padding: 0; transition: 0.2s;">✕</button>
         </div>
       </div>
 
       <!-- Background -->
       <div class="settings-section">
-        <div class="settings-section-title">🎬 Nền Video</div>
+        <div class="settings-section-title" style="display: flex; align-items: center; justify-content: space-between;">
+            <span>🎨 Tùy Chỉnh Nền</span>
+            <div style="display: flex; gap: 5px;">
+                <button class="settings-btn" id="bg-mode-video-btn" style="background-color: #333; color: #fff;">Video/GIF</button>
+                <button class="settings-btn" id="bg-mode-color-btn">Màu Gradient</button>
+            </div>
+        </div>
         
-        <div class="bg-settings-container" style="display: flex; align-items: flex-start; gap: 30px;">
+        <div id="bg-video-controls" class="bg-settings-container" style="display: flex; align-items: flex-start; gap: 30px;">
           <!-- Background Preview -->
           <div id="bg-preview-container" class="bg-preview-container" style="flex-shrink: 0; margin: 0;">
             <div id="bg-preview-overlay" class="bg-preview-overlay"></div>
@@ -128,6 +147,45 @@
             </div>
           </div>
         </div>
+
+        <div id="bg-color-controls" class="bg-settings-container" style="display: none; align-items: flex-start; gap: 30px; margin-top: 15px;">
+          <div id="bg-color-preview" class="bg-preview-container" style="flex-shrink: 0; margin: 0; background: linear-gradient(45deg, #1a1a1a, #333333); border-radius: 8px;">
+          </div>
+          <div class="bg-controls" style="flex: 1;">
+            <div id="dynamic-color-list" style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px;">
+                <!-- dynamic rows go here -->
+            </div>
+            <button class="settings-btn" id="bg-color-add-btn" style="width: 100%; margin-bottom: 15px; justify-content: center;">➕ Thêm màu mới</button>
+            <div class="settings-row">
+              <label>Góc độ: <span id="bg-color-angle-val">45</span>°</label>
+              <input type="range" id="bg-color-angle" min="0" max="360" value="45" class="settings-slider">
+            </div>
+            <div class="settings-row">
+              <label>Khôi phục mặc định</label>
+              <button class="settings-btn" id="bg-color-reset-btn">Đặt lại</button>
+            </div>
+          </div>
+        </div>
+        
+        <div class="settings-row" style="align-items: center; margin-top: 15px; border-top: 1px solid #444; padding-top: 15px;">
+          <label>🎮 Hiệu ứng Retro</label>
+          <input type="checkbox" id="crt-mode-checkbox" class="settings-checkbox" style="width: 20px; height: 20px;">
+        </div>
+        <div id="retro-sliders" style="display: none; flex-direction: column; gap: 10px; margin-top: 10px;">
+            <div class="settings-row">
+              <label>Nhiễu hạt (Noise): <span id="noise-level-val">15</span>%</label>
+              <input type="range" id="noise-level-slider" min="0" max="100" value="15" class="settings-slider">
+            </div>
+            <div class="settings-row">
+              <label>Cấp độ Dither: <span id="dither-level-val">20</span>%</label>
+              <input type="range" id="dither-level-slider" min="0" max="100" value="20" class="settings-slider">
+            </div>
+            <div class="settings-row">
+              <label>Sọc ngang VHS: <span id="vhs-level-val">100</span>%</label>
+              <input type="range" id="vhs-level-slider" min="0" max="100" value="100" class="settings-slider">
+            </div>
+        </div>
+
       </div>
 
       <!-- Card Icons -->
@@ -164,6 +222,47 @@
         <div class="settings-row">
           <label>Âm lượng: <span id="sfx-volume-val">50</span>%</label>
           <input type="range" id="sfx-volume-slider" min="0" max="100" value="50" class="settings-slider">
+        </div>
+      </div>
+
+      <!-- Clock Settings -->
+      <div class="settings-section">
+        <div class="settings-section-title">🕒 Đồng Hồ</div>
+        
+        <div class="settings-row">
+          <label>Cỡ chữ: <span id="clock-size-val">48</span>px</label>
+          <input type="range" id="clock-size-slider" min="20" max="150" value="48" class="settings-slider">
+        </div>
+
+        <div class="settings-row">
+          <label>Màu chữ</label>
+          <input type="color" id="clock-color-picker" value="#ffffff" style="cursor: pointer; width: 40px; height: 40px; border: none; padding: 0; border-radius: 5px; background: transparent;">
+        </div>
+        
+        <div class="settings-row">
+          <label>Phông chữ</label>
+          <select id="clock-font-select" class="settings-slider" style="background: #2a2a2a; border: 1px solid #444; color: white; padding: 5px; border-radius: 5px;">
+            <option value="'Courier New', Courier, monospace">Monospace</option>
+            <option value="Arial, sans-serif">Arial</option>
+            <option value="'Times New Roman', Times, serif">Times New Roman</option>
+            <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+            <option value="Impact, fantasy">Impact</option>
+          </select>
+        </div>
+
+        <div class="settings-row" style="align-items: center;">
+          <label>Định dạng AM / PM</label>
+          <input type="checkbox" id="clock-ampm-checkbox" style="width: 18px; height: 18px; cursor: pointer;">
+        </div>
+
+        <div class="settings-row" style="align-items: center;">
+          <label>Icon Sáng / Tối (☀️/🌙)</label>
+          <input type="checkbox" id="clock-icon-checkbox" style="width: 18px; height: 18px; cursor: pointer;">
+        </div>
+        
+        <div class="settings-row">
+          <label>Khôi phục vị trí mặc định</label>
+          <button class="settings-btn" id="clock-reset-btn">Đặt lại</button>
         </div>
       </div>
 
