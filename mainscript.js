@@ -76,7 +76,65 @@ document.addEventListener("DOMContentLoaded", function () {
         return v !== null ? JSON.parse(v) : defaultVal;
     }
     function setSetting(key, val) {
-        localStorage.setItem("setting_" + key, JSON.stringify(val));
+        try {
+            localStorage.setItem("setting_" + key, JSON.stringify(val));
+        } catch (e) {
+            if (e.name === "QuotaExceededError") {
+                showNotification("Lỗi bộ nhớ", "Dung lượng LocalStorage đã đầy. Vui lòng xóa bớt icon hoặc file.");
+            }
+        }
+    }
+
+    // --- IndexedDB for Large Files (Background Video/GIF) ---
+    const DB_NAME = "ArtoStorageDB";
+    const DB_VERSION = 1;
+    const STORE_NAME = "backgrounds";
+
+    function openDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
+            request.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    db.createObjectStore(STORE_NAME);
+                }
+            };
+            request.onsuccess = (e) => resolve(e.target.result);
+            request.onerror = (e) => reject(e.target.error);
+        });
+    }
+
+    async function saveLargeFile(key, file) {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, "readwrite");
+            const store = tx.objectStore(STORE_NAME);
+            const request = store.put(file, key);
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async function getLargeFile(key) {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, "readonly");
+            const store = tx.objectStore(STORE_NAME);
+            const request = store.get(key);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async function deleteLargeFile(key) {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, "readwrite");
+            const store = tx.objectStore(STORE_NAME);
+            const request = store.delete(key);
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
     }
 
     // Custom card icons pool (base64 strings)
@@ -130,11 +188,20 @@ document.addEventListener("DOMContentLoaded", function () {
     // ------------------------------------------
     // 5. BACKGROUND SETTINGS INIT
     // ------------------------------------------
-    function applyBackgroundSettings() {
+    async function applyBackgroundSettings() {
         const mode = getSetting("bg_mode", "video");
         const brightness = getSetting("bg_brightness", 25);
         const speed = getSetting("bg_speed", 0.5);
-        const customSrc = getSetting("bg_custom_src", null);
+        
+        // Use IndexedDB for custom source
+        let customSrc = null;
+        const fileBlob = await getLargeFile("bg_custom_file");
+        if (fileBlob) {
+            customSrc = URL.createObjectURL(fileBlob);
+        } else {
+            // Fallback to old localStorage key for backward compatibility or if it's a string
+            customSrc = getSetting("bg_custom_src", null);
+        }
         
         const colors = getSetting("bg_colors", ["#1a1a1a", "#333333"]);
         const angle = getSetting("bg_color_angle", 45);
@@ -177,7 +244,10 @@ document.addEventListener("DOMContentLoaded", function () {
             if (prevGif) prevGif.style.filter = `brightness(${brightness}%)`;
 
             if (customSrc && customSrc !== "default") {
-                if (customSrc.startsWith("data:video")) {
+                const isVideo = (fileBlob && fileBlob.type.startsWith("video")) || (typeof customSrc === "string" && customSrc.startsWith("data:video"));
+                const isImage = (fileBlob && fileBlob.type.startsWith("image")) || (typeof customSrc === "string" && customSrc.startsWith("data:image"));
+
+                if (isVideo) {
                     if (video) {
                         video.style.display = "block";
                         const s = video.querySelector("source");
@@ -191,7 +261,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     if (prevGif) prevGif.style.display = "none";
                     const g = document.getElementById("gif-background");
                     if (g) g.style.display = "none";
-                } else if (customSrc.startsWith("data:image")) {
+                } else if (isImage) {
                     if (video) video.style.display = "none";
                     if (prevVideo) prevVideo.style.display = "none";
                     if (prevGif) {
@@ -467,7 +537,8 @@ document.addEventListener("DOMContentLoaded", function () {
     // 11. DOWNLOAD / UPLOAD
     // ------------------------------------------
     if (downloadCardsBtn) {
-        downloadCardsBtn.addEventListener("click", () => {
+        downloadCardsBtn.addEventListener("click", (e) => {
+            e.preventDefault();
             const data = localStorage.getItem("cards");
             if (!data) { showNotification("Lỗi", "Không có dữ liệu thẻ."); return; }
             const blob = new Blob([data], { type: "application/json" });
@@ -497,6 +568,7 @@ document.addEventListener("DOMContentLoaded", function () {
                         showNotification("Thành công", "Đã khôi phục dữ liệu thành công!");
                     } else throw new Error("Dữ liệu không hợp lệ.");
                 } catch (err) { showNotification("Lỗi", err.message); }
+                e.target.value = "";
             };
             reader.readAsText(file);
         });
@@ -694,6 +766,8 @@ document.addEventListener("DOMContentLoaded", function () {
         if (clockFont) clockFont.value = getSetting("clock_font", "'Courier New', Courier, monospace");
         if (clockAmpm) clockAmpm.checked = getSetting("clock_ampm", false);
         if (clockIconCheckbox) clockIconCheckbox.checked = getSetting("clock_icon", false);
+        const clockDotCheckbox = document.getElementById("clock-dot-checkbox");
+        if (clockDotCheckbox) clockDotCheckbox.checked = getSetting("clock_dot", true);
 
         const crtModeCb = document.getElementById("crt-mode-checkbox");
         if (crtModeCb) {
@@ -723,6 +797,33 @@ document.addEventListener("DOMContentLoaded", function () {
             const v = getSetting("vhs_level", 100);
             vhsSlider.value = v;
             vhsVal.textContent = v;
+        }
+
+        updateStorageInfo();
+    }
+
+    async function updateStorageInfo() {
+        const bar = document.getElementById("storage-progress");
+        if (!bar) return;
+        
+        if (navigator.storage && navigator.storage.estimate) {
+            try {
+                const estimate = await navigator.storage.estimate();
+                const percentUsed = ((estimate.usage / estimate.quota) * 100).toFixed(1);
+                const usedMB = (estimate.usage / (1024 * 1024)).toFixed(2);
+                const totalGB = (estimate.quota / (1024 * 1024 * 1024)).toFixed(1);
+                
+                if (bar) {
+                    bar.style.width = percentUsed + "%";
+                    // Add hover info to the parent row for easier access
+                    const row = bar.closest(".settings-row");
+                    if (row) row.title = `Dung lượng đã dùng: ${usedMB} MB / Tổng: ${totalGB} GB (${percentUsed}%)`;
+                }
+            } catch (e) {
+                console.error("Storage estimate failed", e);
+            }
+        } else {
+            info.textContent = "Không hỗ trợ";
         }
     }
 
@@ -755,28 +856,38 @@ document.addEventListener("DOMContentLoaded", function () {
     const bgUploadInput = document.getElementById("bg-upload-input");
     if (bgUploadBtn) bgUploadBtn.addEventListener("click", () => bgUploadInput.click());
     if (bgUploadInput) {
-        bgUploadInput.addEventListener("change", e => {
+        bgUploadInput.addEventListener("change", async e => {
             const file = e.target.files[0];
             if (!file) return;
-            const reader = new FileReader();
-            reader.onload = ev => {
-                const base64 = ev.target.result;
-                setSetting("bg_custom_src", base64);
+
+            showNotification("Hệ thống", "Đang xử lý file lớn...");
+            try {
+                // Save original file to IndexedDB
+                await saveLargeFile("bg_custom_file", file);
+                
+                // Clear old localStorage src to save space
+                localStorage.removeItem("setting_bg_custom_src");
+                
                 applyBackgroundSettings();
-            };
-            reader.readAsDataURL(file);
+                showNotification("Thành công", "Đã cập nhật hình nền mới!");
+            } catch (err) {
+                console.error(err);
+                showNotification("Lỗi", "Không thể lưu file vào bộ nhớ IndexedDB.");
+            }
         });
     }
 
     // Background reset
     const bgResetBtn = document.getElementById("bg-reset-btn");
     if (bgResetBtn) {
-        bgResetBtn.addEventListener("click", () => {
+        bgResetBtn.addEventListener("click", async () => {
             setSetting("bg_brightness", 25);
             setSetting("bg_speed", 0.5);
             setSetting("bg_custom_src", null);
+            await deleteLargeFile("bg_custom_file");
             applyBackgroundSettings();
             syncSettingsUI();
+            showNotification("Thành công", "Đã đặt lại cài đặt nền.");
         });
     }
 
@@ -882,11 +993,19 @@ document.addEventListener("DOMContentLoaded", function () {
         updateClock();
     });
 
+    const clockDotCheckbox = document.getElementById("clock-dot-checkbox");
+    if (clockDotCheckbox) clockDotCheckbox.addEventListener("change", (e) => {
+        setSetting("clock_dot", e.target.checked);
+        updateClock();
+    });
+
     const clockResetBtn = document.getElementById("clock-reset-btn");
     if (clockResetBtn) clockResetBtn.addEventListener("click", () => {
         setSetting("clock_pos", "top-center");
         setSetting("clock_color", "#ffffff");
         setSetting("clock_size", 48);
+        setSetting("clock_dot", true);
+        setSetting("clock_custom_use_center", false);
         syncSettingsUI();
         applyClockSettings();
     });
@@ -1277,8 +1396,15 @@ document.addEventListener("DOMContentLoaded", function () {
             const padding = 20;
 
             if (pos === "custom") {
-                clockEl.style.left = getSetting("clock_custom_x", padding) + "px";
-                clockEl.style.top = getSetting("clock_custom_y", padding) + "px";
+                const useCenter = getSetting("clock_custom_use_center", false);
+                if (useCenter) {
+                    clockEl.style.left = getSetting("clock_custom_x", padding) + "px";
+                    clockEl.style.top = getSetting("clock_custom_y", padding) + "px";
+                    clockEl.style.transform = "translateX(-50%)";
+                } else {
+                    clockEl.style.left = getSetting("clock_custom_x", padding) + "px";
+                    clockEl.style.top = getSetting("clock_custom_y", padding) + "px";
+                }
             } else {
                 switch(pos) {
                     case "top-left":
@@ -1359,11 +1485,23 @@ document.addEventListener("DOMContentLoaded", function () {
         h = h.toString().padStart(2, '0');
         
         clockTime.textContent = `${h}:${m}:${s}`;
-        clockAmpmStr.textContent = ampmStr;
+        
+        if (useAmpm) {
+            clockAmpmStr.textContent = ampmStr;
+            clockAmpmStr.style.display = "inline";
+        } else {
+            clockAmpmStr.style.display = "none";
+        }
+
+        const showDot = getSetting("clock_dot", true);
+        const dot = document.getElementById("clock-retro-dot");
+        if (dot) {
+            dot.style.display = showDot ? "inline" : "none";
+        }
 
         if (showIcon) {
             const isDay = now.getHours() >= 6 && now.getHours() < 18;
-            clockIcon.textContent = isDay ? "O " : "C ";
+            clockIcon.textContent = isDay ? "O" : "C"; // Removed trailing space
             clockIcon.style.display = "inline";
         } else {
             clockIcon.style.display = "none";
@@ -1409,11 +1547,12 @@ document.addEventListener("DOMContentLoaded", function () {
         });
         document.addEventListener("mouseup", (e) => {
             if (isDraggingClock) {
+                const rect = clockEl.getBoundingClientRect();
+                
                 isDraggingClock = false;
                 clockEl.classList.remove("dragging");
                 clockEl.style.cursor = "grab";
                 
-                const rect = clockEl.getBoundingClientRect();
                 const dropX = rect.left;
                 const dropY = rect.top;
                 const dropW = rect.width;
@@ -1435,6 +1574,24 @@ document.addEventListener("DOMContentLoaded", function () {
                     { id: 'bottom-right', x: w - dropW - padding, y: h - dropH - padding }
                 ];
 
+                // Add cards as snap points
+                const cards = Array.from(document.querySelectorAll("#card-wrapper .card"));
+                cards.forEach((card, idx) => {
+                    const crect = card.getBoundingClientRect();
+                    // Snap to horizontal center of card, and slightly below it
+                    points.push({
+                        id: 'card-' + idx,
+                        x: crect.left + (crect.width / 2) - (dropW / 2),
+                        y: crect.bottom + 10
+                    });
+                    // Also snap to horizontal center of card, and vertically centered inside it
+                    points.push({
+                        id: 'card-center-' + idx,
+                        x: crect.left + (crect.width / 2) - (dropW / 2),
+                        y: crect.top + (crect.height / 2) - (dropH / 2)
+                    });
+                });
+
                 let closest = null;
                 let minDist = 150; // magnetism threshold
                 points.forEach(p => {
@@ -1446,11 +1603,24 @@ document.addEventListener("DOMContentLoaded", function () {
                 });
 
                 if (closest) {
-                    setSetting("clock_pos", closest);
+                    if (closest.startsWith('card-')) {
+                        // For card snaps, we save as custom absolute position
+                        // but we use the CENTER point to ensure perfect alignment
+                        const p = points.find(pt => pt.id === closest);
+                        const centerX = p.x + dropW / 2;
+                        setSetting("clock_pos", "custom");
+                        setSetting("clock_custom_x", centerX);
+                        setSetting("clock_custom_y", p.y);
+                        setSetting("clock_custom_use_center", true);
+                    } else {
+                        setSetting("clock_pos", closest);
+                        setSetting("clock_custom_use_center", false);
+                    }
                 } else {
                     setSetting("clock_pos", "custom");
                     setSetting("clock_custom_x", dropX);
                     setSetting("clock_custom_y", dropY);
+                    setSetting("clock_custom_use_center", false);
                 }
                 
                 applyClockSettings();
@@ -1460,5 +1630,123 @@ document.addEventListener("DOMContentLoaded", function () {
     applyClockSettings();
     applyCrtMode();
 
+    const navToggleBtn = document.getElementById("nav-toggle-btn");
+    const navigation = document.getElementById("navigation");
+    if (navToggleBtn && navigation) {
+        navToggleBtn.addEventListener("click", () => {
+            navigation.classList.toggle("nav-hidden");
+        });
+    }
+
     initializeCardPage();
+
+    // ------------------------------------------
+    // FIREBASE AUTH & SYNC LOGIC
+    // ------------------------------------------
+    function initializeAuth() {
+        const authSection = document.getElementById("user-auth-section");
+        const loginBtn = document.getElementById("login-btn");
+        const logoutBtn = document.getElementById("logout-btn");
+        const logoutPanel = document.getElementById("logout-panel");
+        const userInfo = document.getElementById("user-info");
+        const userPhoto = document.getElementById("user-photo");
+
+        let isFirstLoad = true;
+
+        function createBurst(x, y) {
+            const count = 30;
+            const colors = ['#d17842', '#ffffff', '#ffcc00', '#ff4d4d'];
+            for (let i = 0; i < count; i++) {
+                const p = document.createElement('div');
+                p.className = 'particle';
+                const size = Math.random() * 6 + 2;
+                p.style.width = size + 'px';
+                p.style.height = size + 'px';
+                p.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                p.style.left = x + 'px';
+                p.style.top = y + 'px';
+                
+                const angle = Math.random() * Math.PI * 2;
+                const dist = Math.random() * 100 + 50;
+                p.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
+                p.style.setProperty('--ty', Math.sin(angle) * dist + 'px');
+                
+                document.body.appendChild(p);
+                setTimeout(() => p.remove(), 600);
+            }
+        }
+
+        if (loginBtn) {
+            loginBtn.addEventListener("click", () => {
+                window.auth.signInWithPopup(window.googleProvider)
+                    .then(() => {
+                        showNotification("Thành công", "Đã đăng nhập tài khoản!");
+                    })
+                    .catch(err => showNotification("Lỗi", "Đăng nhập thất bại: " + err.message));
+            });
+        }
+
+        if (logoutBtn) {
+            logoutBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                window.auth.signOut().then(() => {
+                    logoutPanel.classList.remove("active");
+                    showNotification("Hệ thống", "Đã đăng xuất.");
+                });
+            });
+        }
+
+        if (userInfo) {
+            userInfo.addEventListener("click", (e) => {
+                e.stopPropagation();
+                if (logoutPanel) logoutPanel.classList.toggle("active");
+            });
+        }
+
+        document.addEventListener("click", () => {
+            if (logoutPanel) logoutPanel.classList.remove("active");
+        });
+
+        window.auth.onAuthStateChanged(user => {
+            if (user) {
+                if (userPhoto) {
+                    userPhoto.src = user.photoURL || "icon-main.png";
+                    
+                    if (!isFirstLoad && loginBtn) {
+                        // Start spin animation on CONTAINER border
+                        if (authSection) authSection.classList.add("loading");
+                        
+                        // Wait for spin to finish before swapping
+                        setTimeout(() => {
+                            if (authSection) authSection.classList.remove("loading");
+                            loginBtn.classList.add("hidden");
+                            if (userInfo) userInfo.classList.remove("hidden");
+                            
+                            const rect = userInfo.getBoundingClientRect();
+                            createBurst(rect.left + rect.width/2, rect.top + rect.height/2);
+                        }, 800);
+                    } else {
+                        if (loginBtn) loginBtn.classList.add("hidden");
+                        if (userInfo) userInfo.classList.remove("hidden");
+                    }
+                }
+                console.log("User logged in:", user.uid);
+            } else {
+                if (loginBtn) loginBtn.classList.remove("hidden");
+                if (userInfo) userInfo.classList.add("hidden");
+                
+                // GUEST MODE: Clear all local data on reload if not logged in
+                if (!isFirstLoad) {
+                    console.log("Guest mode: Clearing local data...");
+                    localStorage.removeItem("custom_icons");
+                    localStorage.removeItem("arto_settings");
+                    localStorage.removeItem("cards");
+                    setTimeout(() => location.reload(), 500);
+                }
+            }
+            isFirstLoad = false;
+        });
+    }
+
+    initializeAuth();
 });
