@@ -70,10 +70,22 @@ window.saveUserDataToCloud = async function() {
         const key = localStorage.key(i);
         data[key] = localStorage.getItem(key);
     }
-    
+
+    // Separate image elements from text elements
+    let imageElements = [];
     try {
         const elements = await getMindmapElements();
-        if (elements) {
+        if (elements && Array.isArray(elements)) {
+            const textElements = elements.map(el => {
+                if (el.type === 'image') {
+                    // Keep a placeholder for images, save actual data separately
+                    imageElements.push(el);
+                    return { ...el, content: '__IMAGE_CHUNKED__' };
+                }
+                return el;
+            });
+            data['indexeddb_blank_mindmap_elements'] = JSON.stringify(textElements);
+        } else if (elements) {
             data['indexeddb_blank_mindmap_elements'] = JSON.stringify(elements);
         }
     } catch(e) {
@@ -82,66 +94,77 @@ window.saveUserDataToCloud = async function() {
 
     if (Object.keys(data).length === 0) return;
 
-    let dataString = JSON.stringify(data);
-
-    // Compress with LZ-String if available
-    let payload;
-    if (typeof LZString !== 'undefined') {
-        payload = { compressed: LZString.compressToUTF16(dataString) };
-    } else {
-        // Fallback: strip heavy icons if no compression
-        if (dataString.length > 900000) {
-            delete data['custom_card_icons'];
-            delete data['main_card_custom_icons'];
-            dataString = JSON.stringify(data);
-        }
-        if (dataString.length > 1000000) {
-            console.warn("Data too large for Firestore.");
-            const notificationContainer = document.getElementById("notification-container");
-            if (notificationContainer) {
-                const notif = document.createElement("div");
-                notif.className = "notification";
-                notif.style.backgroundColor = "#ff4d4d";
-                notif.innerHTML = `<strong>Lỗi Đồng bộ</strong><br>Dữ liệu quá lớn (vượt 1MB). Hãy dùng Tải Xuống (Backup).`;
-                notificationContainer.appendChild(notif);
-                setTimeout(() => { notif.style.opacity="0"; setTimeout(()=>notif.remove(),300); }, 3000);
-            }
-            return;
-        }
-        payload = { localStorageData: data };
+    // Helper to show notification
+    function showSyncNotif(msg, color) {
+        const nc = document.getElementById("notification-container");
+        if (!nc) return;
+        const n = document.createElement("div");
+        n.className = "notification";
+        if (color) n.style.backgroundColor = color;
+        n.innerHTML = msg;
+        nc.appendChild(n);
+        setTimeout(() => { n.style.opacity = "0"; setTimeout(() => n.remove(), 300); }, 3000);
     }
 
-    window.db.collection('users').doc(user.uid).set(Object.assign(payload, {
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }), { merge: true })
-    .then(() => {
-        console.log("Data synced to cloud");
-        const notificationContainer = document.getElementById("notification-container");
-        if (notificationContainer) {
-            const notif = document.createElement("div");
-            notif.className = "notification";
-            notif.innerHTML = `<strong>Đồng bộ</strong><br>Đã lưu dữ liệu lên đám mây!`;
-            notificationContainer.appendChild(notif);
-            setTimeout(() => {
-                notif.style.opacity = "0";
-                setTimeout(() => notif.remove(), 300);
-            }, 3000);
+    // Compress main payload
+    let payload;
+    let dataString = JSON.stringify(data);
+    if (typeof LZString !== 'undefined') {
+        const compressed = LZString.compressToUTF16(dataString);
+        // LZString UTF16 gives 2 bytes per char, check byte count
+        if (compressed.length * 2 < 1000000) {
+            payload = { compressed, hasImageChunks: imageElements.length > 0, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+        } else {
+            // Even compressed too big - strip custom icons too
+            delete data['custom_card_icons'];
+            delete data['main_card_custom_icons'];
+            const compressed2 = LZString.compressToUTF16(JSON.stringify(data));
+            payload = { compressed: compressed2, hasImageChunks: imageElements.length > 0, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+        }
+    } else {
+        payload = { localStorageData: data, hasImageChunks: imageElements.length > 0, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+    }
+
+    const userDoc = window.db.collection('users').doc(user.uid);
+
+    // Save main payload
+    userDoc.set(payload, { merge: true })
+    .then(async () => {
+        console.log("Main data synced to cloud");
+        showSyncNotif(`<strong>Đồng bộ</strong><br>Đã lưu ghi chú lên đám mây!`);
+
+        // Save image chunks separately if any
+        if (imageElements.length > 0) {
+            const CHUNK_SIZE = 5; // 5 images per Firestore doc
+            const chunks = [];
+            for (let i = 0; i < imageElements.length; i += CHUNK_SIZE) {
+                chunks.push(imageElements.slice(i, i + CHUNK_SIZE));
+            }
+            const chunksCol = userDoc.collection('chunks');
+            // Clear old chunks first
+            const oldChunks = await chunksCol.get();
+            const delBatch = window.db.batch();
+            oldChunks.forEach(d => delBatch.delete(d.ref));
+            await delBatch.commit();
+
+            // Write new chunks
+            const batch = window.db.batch();
+            chunks.forEach((chunk, idx) => {
+                let chunkStr = JSON.stringify(chunk);
+                if (typeof LZString !== 'undefined') {
+                    batch.set(chunksCol.doc('img_' + idx), { compressed: LZString.compressToUTF16(chunkStr) });
+                } else {
+                    batch.set(chunksCol.doc('img_' + idx), { images: chunk });
+                }
+            });
+            await batch.commit();
+            console.log("Image chunks synced:", chunks.length, "chunk(s)");
+            showSyncNotif(`<strong>Đồng bộ</strong><br>Đã lưu ${imageElements.length} ảnh lên đám mây!`);
         }
     })
     .catch(err => {
         console.error("Cloud sync error:", err);
-        const notificationContainer = document.getElementById("notification-container");
-        if (notificationContainer) {
-            const notif = document.createElement("div");
-            notif.className = "notification";
-            notif.style.backgroundColor = "#ff4d4d";
-            notif.innerHTML = `<strong>Lỗi Đồng bộ</strong><br>Không thể lưu lên đám mây!`;
-            notificationContainer.appendChild(notif);
-            setTimeout(() => {
-                notif.style.opacity = "0";
-                setTimeout(() => notif.remove(), 300);
-            }, 3000);
-        }
+        showSyncNotif(`<strong>Lỗi Đồng bộ</strong><br>Không thể lưu lên đám mây!`, "#ff4d4d");
     });
 };
 
@@ -202,7 +225,8 @@ localStorage.clear = function() {
 
 window.auth.onAuthStateChanged(user => {
     if (user) {
-        window.db.collection('users').doc(user.uid).get().then(async doc => {
+        const userDoc = window.db.collection('users').doc(user.uid);
+        userDoc.get().then(async doc => {
             if (doc.exists) {
                 const docData = doc.data();
                 let cloudData;
@@ -217,6 +241,35 @@ window.auth.onAuthStateChanged(user => {
                 }
 
                 if (cloudData) {
+                    // If image chunks exist, load and merge them back
+                    if (docData.hasImageChunks) {
+                        try {
+                            const chunksSnap = await userDoc.collection('chunks').get();
+                            let allImages = [];
+                            chunksSnap.forEach(chunkDoc => {
+                                const cd = chunkDoc.data();
+                                if (cd.compressed && typeof LZString !== 'undefined') {
+                                    try { allImages = allImages.concat(JSON.parse(LZString.decompressFromUTF16(cd.compressed))); } catch(e) {}
+                                } else if (cd.images) {
+                                    allImages = allImages.concat(cd.images);
+                                }
+                            });
+
+                            // Merge images back into text elements
+                            if (cloudData['indexeddb_blank_mindmap_elements'] && allImages.length > 0) {
+                                const textEls = JSON.parse(cloudData['indexeddb_blank_mindmap_elements']);
+                                // Replace placeholders with real image data
+                                const imageMap = {};
+                                allImages.forEach(img => { imageMap[img.id] = img; });
+                                const merged = textEls.map(el => imageMap[el.id] ? imageMap[el.id] : el);
+                                // Append any images not already in textEls
+                                const textIds = new Set(textEls.map(e => e.id));
+                                allImages.forEach(img => { if (!textIds.has(img.id)) merged.push(img); });
+                                cloudData['indexeddb_blank_mindmap_elements'] = JSON.stringify(merged);
+                            }
+                        } catch(e) { console.error("Error loading image chunks:", e); }
+                    }
+
                     let changed = false;
                     for (const key in cloudData) {
                         if (key === 'indexeddb_blank_mindmap_elements') {
@@ -247,8 +300,12 @@ window.auth.onAuthStateChanged(user => {
                                 setTimeout(() => notif.remove(), 300);
                             }, 3000);
                         }
-                        // Need a small delay to let UI show up before reload
-                        setTimeout(() => location.reload(), 1500);
+                        // Re-render canvas directly if possible, else reload
+                        if (typeof window.renderMindmap === 'function') {
+                            setTimeout(() => window.renderMindmap(), 300);
+                        } else {
+                            setTimeout(() => location.reload(), 1500);
+                        }
                     }
                 }
             } else {

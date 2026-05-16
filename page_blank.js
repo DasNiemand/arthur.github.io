@@ -2758,6 +2758,7 @@ document.addEventListener("DOMContentLoaded", function () {
         });
 
         renderMindmap();
+        window.renderMindmap = renderMindmap; // expose for cloud sync restore
         updateWorkspaceTransform();
 
         // ------------------------------------------
