@@ -17,6 +17,13 @@ window.auth = firebase.auth();
 window.db = firebase.firestore();
 window.googleProvider = new firebase.auth.GoogleAuthProvider();
 
+// Enable offline persistence so data loads from cache when network is unavailable
+window.db.enablePersistence({ synchronizeTabs: true }).catch(err => {
+    if (err.code !== 'failed-precondition' && err.code !== 'unimplemented') {
+        console.warn("Firestore persistence error:", err.code);
+    }
+});
+
 // --- CLOUD SYNC LOGIC ---
 const originalSetItem = localStorage.setItem;
 const originalRemoveItem = localStorage.removeItem;
@@ -333,6 +340,22 @@ window.auth.onAuthStateChanged(user => {
                 // First time login, push current local data
                 window.saveUserDataToCloud();
             }
-        }).catch(err => console.error("Error fetching cloud data:", err));
+        }).catch(err => {
+            console.error("Error fetching cloud data:", err);
+            // Show offline notice but still render from local IndexedDB
+            const nc = document.getElementById("notification-container");
+            if (nc) {
+                const n = document.createElement("div");
+                n.className = "notification";
+                n.style.backgroundColor = "#ff9800";
+                n.innerHTML = `<strong>Offline</strong><br>Không kết nối được cloud. Đang dùng dữ liệu local.`;
+                nc.appendChild(n);
+                setTimeout(() => { n.style.opacity="0"; setTimeout(()=>n.remove(),300); }, 4000);
+            }
+            // Still render whatever is in IndexedDB
+            if (typeof window.renderMindmap === 'function') {
+                setTimeout(() => window.renderMindmap(), 300);
+            }
+        });
     }
 });
