@@ -65,10 +65,19 @@ async function setMindmapElements(val) {
 window.saveUserDataToCloud = async function() {
     if (!window.auth || !window.auth.currentUser) return;
     const user = window.auth.currentUser;
+
+    // Keys containing large base64 image data — never sync to main doc
+    const SKIP_KEYS = ['custom_card_icons', 'main_card_custom_icons', 'custom_icons',
+                       'active_card_icon_data', 'main_active_card_icon_data'];
+
     const data = {};
     for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        data[key] = localStorage.getItem(key);
+        if (SKIP_KEYS.includes(key)) continue;
+        const val = localStorage.getItem(key);
+        // Skip any localStorage value that embeds a raw base64 image
+        if (val && val.includes('data:image/') && val.length > 50000) continue;
+        data[key] = val;
     }
 
     // Separate image elements from text elements
@@ -78,7 +87,6 @@ window.saveUserDataToCloud = async function() {
         if (elements && Array.isArray(elements)) {
             const textElements = elements.map(el => {
                 if (el.type === 'image') {
-                    // Keep a placeholder for images, save actual data separately
                     imageElements.push(el);
                     return { ...el, content: '__IMAGE_CHUNKED__' };
                 }
@@ -106,24 +114,37 @@ window.saveUserDataToCloud = async function() {
         setTimeout(() => { n.style.opacity = "0"; setTimeout(() => n.remove(), 300); }, 3000);
     }
 
-    // Compress main payload
-    let payload;
-    let dataString = JSON.stringify(data);
-    if (typeof LZString !== 'undefined') {
-        const compressed = LZString.compressToUTF16(dataString);
-        // LZString UTF16 gives 2 bytes per char, check byte count
-        if (compressed.length * 2 < 1000000) {
-            payload = { compressed, hasImageChunks: imageElements.length > 0, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
-        } else {
-            // Even compressed too big - strip custom icons too
-            delete data['custom_card_icons'];
-            delete data['main_card_custom_icons'];
-            const compressed2 = LZString.compressToUTF16(JSON.stringify(data));
-            payload = { compressed: compressed2, hasImageChunks: imageElements.length > 0, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
-        }
-    } else {
-        payload = { localStorageData: data, hasImageChunks: imageElements.length > 0, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+    // MAX 524,000 chars after UTF-16 compression (~1MB Firestore limit)
+    const MAX_CHARS = 524000;
+
+    function tryCompress(obj) {
+        if (typeof LZString === 'undefined') return { raw: obj };
+        const c = LZString.compressToUTF16(JSON.stringify(obj));
+        return c.length <= MAX_CHARS ? { compressed: c } : null;
     }
+
+    // Progressive stripping: try full → strip drawings → strip all remaining large values
+    let payload = tryCompress(data);
+    if (!payload) {
+        delete data['blank_mindmap_drawings'];
+        payload = tryCompress(data);
+    }
+    if (!payload) {
+        // Last resort: strip everything except mindmap elements and core settings
+        const keep = ['indexeddb_blank_mindmap_elements', 'crt_mode', 'arto_theme', 'arto_settings'];
+        for (const k of Object.keys(data)) {
+            if (!keep.includes(k)) delete data[k];
+        }
+        payload = tryCompress(data);
+    }
+    if (!payload) {
+        showSyncNotif(`<strong>Lỗi Đồng bộ</strong><br>Dữ liệu vẫn quá lớn sau khi đã nén. Hãy giảm số ghi chú.`, "#ff4d4d");
+        console.error("[SYNC] Data too large even after stripping. Aborting.");
+        return;
+    }
+
+    payload.hasImageChunks = imageElements.length > 0;
+    payload.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
 
     const userDoc = window.db.collection('users').doc(user.uid);
 
