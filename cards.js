@@ -1231,7 +1231,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function loadPage(pageUrl) {
-        if (pageUrl === "page_a.html") {
+        if (pageUrl === "cards.html" || pageUrl === "page_a.html") {
             location.reload();
             return;
         }
@@ -1639,114 +1639,4 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     initializeCardPage();
-
-    // ------------------------------------------
-    // FIREBASE AUTH & SYNC LOGIC
-    // ------------------------------------------
-    function initializeAuth() {
-        const authSection = document.getElementById("user-auth-section");
-        const loginBtn = document.getElementById("login-btn");
-        const logoutBtn = document.getElementById("logout-btn");
-        const logoutPanel = document.getElementById("logout-panel");
-        const userInfo = document.getElementById("user-info");
-        const userPhoto = document.getElementById("user-photo");
-
-        let isFirstLoad = true;
-
-        function createBurst(x, y) {
-            const count = 30;
-            const colors = ['#d17842', '#ffffff', '#ffcc00', '#ff4d4d'];
-            for (let i = 0; i < count; i++) {
-                const p = document.createElement('div');
-                p.className = 'particle';
-                const size = Math.random() * 6 + 2;
-                p.style.width = size + 'px';
-                p.style.height = size + 'px';
-                p.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
-                p.style.left = x + 'px';
-                p.style.top = y + 'px';
-                
-                const angle = Math.random() * Math.PI * 2;
-                const dist = Math.random() * 100 + 50;
-                p.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
-                p.style.setProperty('--ty', Math.sin(angle) * dist + 'px');
-                
-                document.body.appendChild(p);
-                setTimeout(() => p.remove(), 600);
-            }
-        }
-
-        if (loginBtn) {
-            loginBtn.addEventListener("click", () => {
-                window.auth.signInWithPopup(window.googleProvider)
-                    .then(() => {
-                        showNotification("Thành công", "Đã đăng nhập tài khoản!");
-                    })
-                    .catch(err => showNotification("Lỗi", "Đăng nhập thất bại: " + err.message));
-            });
-        }
-
-        if (logoutBtn) {
-            logoutBtn.addEventListener("click", (e) => {
-                e.stopPropagation();
-                window.auth.signOut().then(() => {
-                    logoutPanel.classList.remove("active");
-                    showNotification("Hệ thống", "Đã đăng xuất.");
-                });
-            });
-        }
-
-        if (userInfo) {
-            userInfo.addEventListener("click", (e) => {
-                e.stopPropagation();
-                if (logoutPanel) logoutPanel.classList.toggle("active");
-            });
-        }
-
-        document.addEventListener("click", () => {
-            if (logoutPanel) logoutPanel.classList.remove("active");
-        });
-
-        window.auth.onAuthStateChanged(user => {
-            if (user) {
-                if (userPhoto) {
-                    userPhoto.src = user.photoURL || "icon-main.png";
-                    
-                    if (!isFirstLoad && loginBtn) {
-                        // Start spin animation on CONTAINER border
-                        if (authSection) authSection.classList.add("loading");
-                        
-                        // Wait for spin to finish before swapping
-                        setTimeout(() => {
-                            if (authSection) authSection.classList.remove("loading");
-                            loginBtn.classList.add("hidden");
-                            if (userInfo) userInfo.classList.remove("hidden");
-                            
-                            const rect = userInfo.getBoundingClientRect();
-                            createBurst(rect.left + rect.width/2, rect.top + rect.height/2);
-                        }, 800);
-                    } else {
-                        if (loginBtn) loginBtn.classList.add("hidden");
-                        if (userInfo) userInfo.classList.remove("hidden");
-                    }
-                }
-                console.log("User logged in:", user.uid);
-            } else {
-                if (loginBtn) loginBtn.classList.remove("hidden");
-                if (userInfo) userInfo.classList.add("hidden");
-                
-                // GUEST MODE: Clear all local data on reload if not logged in
-                if (!isFirstLoad) {
-                    console.log("Guest mode: Clearing local data...");
-                    localStorage.removeItem("custom_icons");
-                    localStorage.removeItem("arto_settings");
-                    localStorage.removeItem("cards");
-                    setTimeout(() => location.reload(), 500);
-                }
-            }
-            isFirstLoad = false;
-        });
-    }
-
-    initializeAuth();
 });

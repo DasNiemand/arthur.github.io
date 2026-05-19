@@ -636,15 +636,12 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     async function dbSet(key, val) {
-        console.log("[DB] dbSet called with key:", key, "| triggerCloudSync available:", typeof window.triggerCloudSync);
         if (!db) await initDB();
         return new Promise((resolve, reject) => {
             const tx = db.transaction(storeName, "readwrite");
             const store = tx.objectStore(storeName);
             const request = store.put(val, key);
             request.onsuccess = () => {
-                console.log("[DB] dbSet success for key:", key, "-> calling triggerCloudSync");
-                if (window.triggerCloudSync) window.triggerCloudSync();
                 resolve();
             };
             request.onerror = () => {
@@ -684,38 +681,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 }
             });
         }
-
-        let elements = await dbGet("blank_mindmap_elements");
-        
-        // Migration: If IndexedDB is empty, check LocalStorage
-        if (!elements) {
-            const legacy = localStorage.getItem("blank_mindmap_elements");
-            if (legacy) {
-                elements = JSON.parse(legacy);
-                // Save to IndexedDB so next time it's there
-                await dbSet("blank_mindmap_elements", elements);
-            } else {
-                elements = [];
-            }
-        }
-
-        if (elements && elements.length > 0) {
-            elements.forEach(el => {
-                if (el.type === "sticky") {
-                    createStickyNote(el.x, el.y, el.content, el.id.replace("el_", ""), el.width, el.height, el.bg);
-                } else if (el.type === "shape") {
-                    createShape(el.x, el.y, el.content, el.id.replace("el_", ""), el.width, el.height, el.bg, el.shapeType);
-                } else if (el.type === "text") {
-                    createTextBlock(el.x, el.y, el.content, el.id.replace("el_", ""));
-                } else if (el.type === "section") {
-                    createSection(el.x, el.y, el.title || "Section", el.id.replace("el_", ""), el.width, el.height, el.bg);
-                } else if (el.type === "image") {
-                    createImageElement(el.x, el.y, el.content, el.id.replace("el_", ""), el.width, el.height);
-                }
-            });
-        }
-        
-        loadDrawings();
 
         // ------------------------------------------
         // 11. DOWNLOAD / UPLOAD
@@ -1480,8 +1445,8 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function loadPage(pageUrl) {
-        if (pageUrl === "page_a.html") {
-            window.location.href = "index.html";
+        if (pageUrl === "cards.html" || pageUrl === "page_a.html") {
+            window.location.href = "cards.html";
             return;
         }
         if (!mainContentArea) return;
@@ -1887,6 +1852,239 @@ document.addEventListener("DOMContentLoaded", function () {
     drawingLayer.id = "drawing-layer";
     drawingLayer.style.cssText = "position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 20; background: transparent;";
 
+    const connectorsLayer = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    connectorsLayer.id = "connectors-layer";
+    connectorsLayer.style.cssText = "position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 9; background: transparent;";
+    const connectorDefs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+    connectorDefs.innerHTML = '<marker id="connector-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><polygon points="0 0, 8 4, 0 8" fill="#d17842"/></marker>';
+    connectorsLayer.appendChild(connectorDefs);
+
+    const CONNECTORS_DB_KEY = "blank_mindmap_connectors";
+    let connectorsData = [];
+    let connectorStart = null;
+    let connectorPreviewPath = null;
+    let selectedConnectorId = null;
+
+    function getAnchorFromDot(dot) {
+        return dot.dataset.anchor || ["top", "bottom", "left", "right"].find(a => dot.classList.contains(a)) || "right";
+    }
+
+    function getMindmapElementRect(el) {
+        const x = parseFloat(el.dataset.x) || 0;
+        const y = parseFloat(el.dataset.y) || 0;
+        const w = el.offsetWidth || parseFloat(el.style.width) || 200;
+        const h = el.offsetHeight || parseFloat(el.style.minHeight) || 200;
+        return { x, y, w, h };
+    }
+
+    function getAnchorPoint(elementId, anchor) {
+        const el = document.getElementById(elementId);
+        if (!el) return null;
+        const { x, y, w, h } = getMindmapElementRect(el);
+        switch (anchor) {
+            case "top": return { x: x + w / 2, y };
+            case "bottom": return { x: x + w / 2, y: y + h };
+            case "left": return { x, y: y + h / 2 };
+            case "right": return { x: x + w, y: y + h / 2 };
+            default: return { x: x + w / 2, y: y + h / 2 };
+        }
+    }
+
+    function buildConnectorPathD(x1, y1, x2, y2, fromAnchor, toAnchor) {
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const bend = Math.max(40, Math.min(160, Math.max(Math.abs(dx), Math.abs(dy)) * 0.45));
+        let cp1x = x1, cp1y = y1, cp2x = x2, cp2y = y2;
+        if (fromAnchor === "left" || fromAnchor === "right") {
+            cp1x = x1 + (fromAnchor === "right" ? bend : -bend);
+        } else {
+            cp1y = y1 + (fromAnchor === "bottom" ? bend : -bend);
+        }
+        if (toAnchor === "left" || toAnchor === "right") {
+            cp2x = x2 + (toAnchor === "left" ? -bend : bend);
+        } else {
+            cp2y = y2 + (toAnchor === "top" ? -bend : bend);
+        }
+        return `M ${x1} ${y1} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${x2} ${y2}`;
+    }
+
+    function findConnectorPathEl(id) {
+        return connectorsLayer.querySelector(`path.connector-line[data-id="${id}"]`);
+    }
+
+    function setSelectedConnector(id) {
+        selectedConnectorId = id;
+        connectorsLayer.querySelectorAll("path.connector-line").forEach(p => {
+            p.classList.toggle("selected", p.dataset.id === id);
+        });
+    }
+
+    function clearSelectedConnector() {
+        selectedConnectorId = null;
+        connectorsLayer.querySelectorAll("path.connector-line.selected").forEach(p => p.classList.remove("selected"));
+    }
+
+    async function saveConnectors() {
+        try {
+            await dbSet(CONNECTORS_DB_KEY, connectorsData);
+        } catch (e) {
+            console.error("Connector save failed:", e);
+        }
+    }
+
+    async function loadConnectorsData() {
+        try {
+            let data = await dbGet(CONNECTORS_DB_KEY);
+            if (!data) {
+                const legacy = localStorage.getItem(CONNECTORS_DB_KEY);
+                if (legacy) {
+                    data = JSON.parse(legacy);
+                    await dbSet(CONNECTORS_DB_KEY, data);
+                }
+            }
+            connectorsData = Array.isArray(data) ? data : [];
+        } catch (e) {
+            connectorsData = [];
+        }
+    }
+
+    function pruneOrphanConnectors() {
+        const before = connectorsData.length;
+        connectorsData = connectorsData.filter(c =>
+            document.getElementById(c.from.elementId) && document.getElementById(c.to.elementId)
+        );
+        if (connectorsData.length !== before) saveConnectors();
+    }
+
+    function renderAllConnectorPaths() {
+        connectorsLayer.querySelectorAll("path.connector-line, path.connector-preview").forEach(p => p.remove());
+        pruneOrphanConnectors();
+        connectorsData.forEach(conn => {
+            const fromPt = getAnchorPoint(conn.from.elementId, conn.from.anchor);
+            const toPt = getAnchorPoint(conn.to.elementId, conn.to.anchor);
+            if (!fromPt || !toPt) return;
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            path.classList.add("connector-line");
+            path.dataset.id = conn.id;
+            path.setAttribute("d", buildConnectorPathD(fromPt.x, fromPt.y, toPt.x, toPt.y, conn.from.anchor, conn.to.anchor));
+            path.setAttribute("stroke", "#d17842");
+            path.setAttribute("stroke-width", "2.5");
+            path.setAttribute("fill", "none");
+            path.setAttribute("stroke-linecap", "round");
+            path.setAttribute("marker-end", "url(#connector-arrow)");
+            if (conn.id === selectedConnectorId) path.classList.add("selected");
+            connectorsLayer.appendChild(path);
+        });
+        updateConnectorPointerEvents();
+    }
+
+    function updateConnectorPointerEvents() {
+        const selectable = currentTool === "select";
+        connectorsLayer.querySelectorAll("path.connector-line").forEach(p => {
+            p.style.pointerEvents = selectable ? "stroke" : "none";
+        });
+    }
+
+    function updateConnectorPaths() {
+        connectorsLayer.querySelectorAll("path.connector-line").forEach(path => {
+            const conn = connectorsData.find(c => c.id === path.dataset.id);
+            if (!conn) return;
+            const fromPt = getAnchorPoint(conn.from.elementId, conn.from.anchor);
+            const toPt = getAnchorPoint(conn.to.elementId, conn.to.anchor);
+            if (!fromPt || !toPt) return;
+            path.setAttribute("d", buildConnectorPathD(fromPt.x, fromPt.y, toPt.x, toPt.y, conn.from.anchor, conn.to.anchor));
+        });
+        if (connectorPreviewPath && connectorStart) {
+            const fromPt = getAnchorPoint(connectorStart.elementId, connectorStart.anchor);
+            if (fromPt) {
+                const end = connectorPreviewPath._endPoint || fromPt;
+                connectorPreviewPath.setAttribute("d", buildConnectorPathD(
+                    fromPt.x, fromPt.y, end.x, end.y, connectorStart.anchor, connectorPreviewPath._endAnchor || "left"
+                ));
+            }
+        }
+    }
+
+    function clearConnectorPreview() {
+        connectorPreviewPath = null;
+        connectorStart = null;
+        connectorsLayer.querySelectorAll("path.connector-preview").forEach(p => p.remove());
+    }
+
+    function beginConnectorFromDot(dot) {
+        const el = dot.closest(".mindmap-element");
+        if (!el) return;
+        clearConnectorPreview();
+        connectorStart = {
+            elementId: el.id,
+            anchor: getAnchorFromDot(dot)
+        };
+        connectorPreviewPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        connectorPreviewPath.classList.add("connector-preview");
+        connectorPreviewPath.setAttribute("stroke", "#d17842");
+        connectorPreviewPath.setAttribute("stroke-width", "2.5");
+        connectorPreviewPath.setAttribute("stroke-dasharray", "6 4");
+        connectorPreviewPath.setAttribute("fill", "none");
+        connectorPreviewPath.setAttribute("stroke-linecap", "round");
+        connectorPreviewPath.setAttribute("opacity", "0.75");
+        connectorsLayer.appendChild(connectorPreviewPath);
+        const pt = getAnchorPoint(connectorStart.elementId, connectorStart.anchor);
+        if (pt) {
+            connectorPreviewPath._endPoint = { ...pt };
+            connectorPreviewPath._endAnchor = "left";
+            connectorPreviewPath.setAttribute("d", buildConnectorPathD(pt.x, pt.y, pt.x, pt.y, connectorStart.anchor, "left"));
+        }
+    }
+
+    function finishConnectorAtDot(dot) {
+        if (!connectorStart) return;
+        const el = dot.closest(".mindmap-element");
+        if (!el || el.id === connectorStart.elementId) {
+            clearConnectorPreview();
+            return;
+        }
+        const toAnchor = getAnchorFromDot(dot);
+        const duplicate = connectorsData.some(c =>
+            c.from.elementId === connectorStart.elementId &&
+            c.from.anchor === connectorStart.anchor &&
+            c.to.elementId === el.id &&
+            c.to.anchor === toAnchor
+        );
+        if (duplicate) {
+            clearConnectorPreview();
+            return;
+        }
+        const conn = {
+            id: "conn_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+            from: { elementId: connectorStart.elementId, anchor: connectorStart.anchor },
+            to: { elementId: el.id, anchor: toAnchor }
+        };
+        connectorsData.push(conn);
+        clearConnectorPreview();
+        renderAllConnectorPaths();
+        saveConnectors();
+        showNotification("Connector", "Đã nối hai phần tử.");
+    }
+
+    function removeConnectorsForElements(elementIds) {
+        const idSet = new Set(elementIds);
+        const before = connectorsData.length;
+        connectorsData = connectorsData.filter(c => !idSet.has(c.from.elementId) && !idSet.has(c.to.elementId));
+        if (connectorsData.length !== before) {
+            if (selectedConnectorId && !connectorsData.some(c => c.id === selectedConnectorId)) {
+                clearSelectedConnector();
+            }
+            renderAllConnectorPaths();
+            saveConnectors();
+        }
+    }
+
+    const CONNECTOR_DOTS_HTML = `
+            <div class="connector-dot top" data-anchor="top"></div>
+            <div class="connector-dot bottom" data-anchor="bottom"></div>
+            <div class="connector-dot left" data-anchor="left"></div>
+            <div class="connector-dot right" data-anchor="right"></div>`;
+
     let isDrawing = false;
     let currentPath = null;
     let pathData = "";
@@ -2022,17 +2220,14 @@ document.addEventListener("DOMContentLoaded", function () {
             <div class="resize-handle corner ne" data-dir="ne"></div>
             <div class="resize-handle corner sw" data-dir="sw"></div>
             <div class="resize-handle corner se" data-dir="se"></div>
-            <!-- Connector Dots -->
-            <div class="connector-dot top"></div>
-            <div class="connector-dot bottom"></div>
-            <div class="connector-dot left"></div>
-            <div class="connector-dot right"></div>
+            ${CONNECTOR_DOTS_HTML}
         `;
         
         sticky.style.transform = `translate(${x}px, ${y}px)`;
 
         // Interaction
         sticky.addEventListener("mousedown", (e) => {
+            if (e.target.classList.contains("connector-dot")) return;
             if (currentTool !== "select") return;
             if (e.target.classList.contains("resize-handle")) {
                 e.stopPropagation();
@@ -2155,12 +2350,14 @@ document.addEventListener("DOMContentLoaded", function () {
             <div class="resize-handle corner ne" data-dir="ne"></div>
             <div class="resize-handle corner sw" data-dir="sw"></div>
             <div class="resize-handle corner se" data-dir="se"></div>
+            ${CONNECTOR_DOTS_HTML}
         `;
         
         imageNote.style.transform = `translate(${x}px, ${y}px)`;
 
         // Interaction (Shared with sticky notes)
         imageNote.addEventListener("mousedown", (e) => {
+            if (e.target.classList.contains("connector-dot")) return;
             if (currentTool !== "select") return;
             if (e.target.classList.contains("resize-handle")) {
                 e.stopPropagation();
@@ -2202,7 +2399,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
 
+    let mindmapRenderPromise = null;
+
     async function renderMindmap() {
+        if (mindmapRenderPromise) return mindmapRenderPromise;
+
+        mindmapRenderPromise = (async () => {
         let elements = await dbGet("blank_mindmap_elements");
         
         // Migration: If IndexedDB is empty, check LocalStorage
@@ -2220,8 +2422,21 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         workspace.innerHTML = "";
-        // Re-append drawing layer because innerHTML = "" clears it
+        if (connectorsLayer) workspace.appendChild(connectorsLayer);
         if (drawingLayer) workspace.appendChild(drawingLayer);
+
+        const seenIds = new Set();
+        const deduped = elements.filter(el => {
+            if (!el || !el.id || seenIds.has(el.id)) return false;
+            seenIds.add(el.id);
+            return true;
+        });
+        if (deduped.length !== elements.length) {
+            elements = deduped;
+            await dbSet("blank_mindmap_elements", elements);
+        } else {
+            elements = deduped;
+        }
         
         elements.forEach(el => {
             if (el.type === "sticky") {
@@ -2237,6 +2452,11 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         });
         loadDrawings();
+        await loadConnectorsData();
+        renderAllConnectorPaths();
+        })().finally(() => { mindmapRenderPromise = null; });
+
+        return mindmapRenderPromise;
     }
 
     function startResize(e, el, dir) {
@@ -2348,9 +2568,14 @@ document.addEventListener("DOMContentLoaded", function () {
                     } else {
                         canvas.style.cursor = "url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTEyIDE5bDctNyAzIDMtNyA3LTMtM3pNMTEgMTFsLTEuNS03LjVMMiAybDMuNSAxNC41TDEzIDE4bDUtNXpNMiAybDcuNTg2IDcuNTg2Ij48L3BhdGg+PGNpcmNsZSBjeD0iMTEiIGN5PSIxMSIgcj0iMiI+PC9jaXJjbGU+PC9zdmc+'), auto";
                     }
+                } else if (currentTool === "connector") {
+                    canvas.style.cursor = "crosshair";
                 } else {
                     canvas.style.cursor = "default";
                 }
+
+                workspace.classList.toggle("connector-tool", currentTool === "connector");
+                updateConnectorPointerEvents();
                 
                 // Show sub-toolbars initially when tool is selected
                 const toolbar = document.querySelector(".figjam-toolbar");
@@ -2366,6 +2591,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 
                 if (currentTool !== "select") {
                     selectElement(null);
+                    clearSelectedConnector();
                 }
             }
         });
@@ -2429,6 +2655,11 @@ document.addEventListener("DOMContentLoaded", function () {
         const key = e.key.toLowerCase();
         if (e.ctrlKey || e.metaKey || e.altKey) return; // Prevent tool switch on shortcuts
         
+        if (key === "escape" && connectorStart) {
+            clearConnectorPreview();
+            return;
+        }
+
         if (toolKeyMap[key]) {
             const toolValue = toolKeyMap[key];
             const input = document.querySelector(`input[name="tool"][value="${toolValue}"]`);
@@ -2443,6 +2674,29 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
     let currentErasedNodes = [];
+
+    // Connector tool: capture clicks on anchor dots
+    if (canvas) {
+        canvas.addEventListener("mousedown", (e) => {
+            if (currentTool !== "connector") return;
+            const dot = e.target.closest(".connector-dot");
+            if (!dot) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (connectorStart) finishConnectorAtDot(dot);
+            else beginConnectorFromDot(dot);
+        }, true);
+
+        canvas.addEventListener("mousedown", (e) => {
+            if (currentTool !== "select") return;
+            const path = e.target.closest("#connectors-layer path.connector-line");
+            if (!path) return;
+            e.preventDefault();
+            e.stopPropagation();
+            setSelectedConnector(path.dataset.id);
+            selectElement(null);
+        }, true);
+    }
 
     // Canvas Mouse Events
     if (canvas && workspace) {
@@ -2501,6 +2755,8 @@ document.addEventListener("DOMContentLoaded", function () {
                         selectTool.dispatchEvent(new Event('change'));
                         selectElement(sticky);
                     }
+                } else if (currentTool === "connector") {
+                    clearConnectorPreview();
                 } else if (currentTool === "select") {
                     isSelecting = true;
                     selectStartX = e.clientX;
@@ -2536,7 +2792,24 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         window.addEventListener("mousemove", (e) => {
-            if (isPanning) {
+            if (connectorStart && connectorPreviewPath) {
+                const wx = (e.clientX - translateX) / scale;
+                const wy = (e.clientY - translateY) / scale;
+                const snapDot = document.elementFromPoint(e.clientX, e.clientY)?.closest?.(".connector-dot");
+                let endAnchor = "left";
+                let end = { x: wx, y: wy };
+                if (snapDot) {
+                    const snapEl = snapDot.closest(".mindmap-element");
+                    if (snapEl && snapEl.id !== connectorStart.elementId) {
+                        endAnchor = getAnchorFromDot(snapDot);
+                        const pt = getAnchorPoint(snapEl.id, endAnchor);
+                        if (pt) end = pt;
+                    }
+                }
+                connectorPreviewPath._endPoint = end;
+                connectorPreviewPath._endAnchor = endAnchor;
+                updateConnectorPaths();
+            } else if (isPanning) {
                 translateX = e.clientX - panStartX;
                 translateY = e.clientY - panStartY;
                 updateWorkspaceTransform();
@@ -2622,6 +2895,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 resizingElement.dataset.x = newX;
                 resizingElement.dataset.y = newY;
                 resizingElement.style.transform = `translate(${newX}px, ${newY}px)`;
+                updateConnectorPaths();
             } else if (draggedElement && currentTool === "select") {
                 const mouseWorkspaceX = (e.clientX - translateX) / scale;
                 const mouseWorkspaceY = (e.clientY - translateY) / scale;
@@ -2637,13 +2911,21 @@ document.addEventListener("DOMContentLoaded", function () {
                     el.dataset.y = newY;
                     el.style.transform = `translate(${newX}px, ${newY}px)`;
                 });
+                updateConnectorPaths();
             }
         });
 
         window.addEventListener("mouseup", (e) => {
+            if (connectorStart) {
+                const dot = document.elementFromPoint(e.clientX, e.clientY)?.closest?.(".connector-dot");
+                if (dot) finishConnectorAtDot(dot);
+                else clearConnectorPreview();
+            }
             if (isPanning) {
                 isPanning = false;
-                canvas.style.cursor = currentTool === "hand" ? "grab" : "default";
+                if (currentTool === "hand") canvas.style.cursor = "grab";
+                else if (currentTool === "connector") canvas.style.cursor = "crosshair";
+                else canvas.style.cursor = "default";
             }
             if (isDrawing) {
                 isDrawing = false;
@@ -2670,13 +2952,25 @@ document.addEventListener("DOMContentLoaded", function () {
 
         // Delete selected element with Backspace or Delete
         window.addEventListener("keydown", (e) => {
+            if ((e.key === "Delete" || e.key === "Backspace") && selectedConnectorId) {
+                if (document.activeElement.isContentEditable) return;
+                connectorsData = connectorsData.filter(c => c.id !== selectedConnectorId);
+                clearSelectedConnector();
+                renderAllConnectorPaths();
+                saveConnectors();
+                e.preventDefault();
+                return;
+            }
+
             if ((e.key === "Delete" || e.key === "Backspace") && selectedElements.length > 0) {
                 if (document.activeElement.isContentEditable) {
                     return; 
                 }
                 
+                const removedIds = selectedElements.map(el => el.id);
                 selectedElements.forEach(el => el.remove());
                 selectedElements = [];
+                removeConnectorsForElements(removedIds);
                 saveMindmap();
             }
             
@@ -2758,128 +3052,7 @@ document.addEventListener("DOMContentLoaded", function () {
         });
 
         renderMindmap();
-        window.renderMindmap = renderMindmap; // expose for cloud sync restore
+        window.renderMindmap = renderMindmap;
         updateWorkspaceTransform();
-
-        // ------------------------------------------
-        // FIREBASE AUTH & SYNC LOGIC
-        // ------------------------------------------
-        function initializeAuth() {
-            const loginBtn = document.getElementById("login-btn");
-            const logoutBtn = document.getElementById("logout-btn");
-            const logoutPanel = document.getElementById("logout-panel");
-            const userInfo = document.getElementById("user-info");
-            const userPhoto = document.getElementById("user-photo");
-
-            let isFirstLoad = true;
-
-            function createBurst(x, y) {
-                const count = 30;
-                const colors = ['#d17842', '#ffffff', '#ffcc00', '#ff4d4d'];
-                for (let i = 0; i < count; i++) {
-                    const p = document.createElement('div');
-                    p.className = 'particle';
-                    const size = Math.random() * 6 + 2;
-                    p.style.width = size + 'px';
-                    p.style.height = size + 'px';
-                    p.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
-                    p.style.left = x + 'px';
-                    p.style.top = y + 'px';
-                    
-                    const angle = Math.random() * Math.PI * 2;
-                    const dist = Math.random() * 100 + 50;
-                    p.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
-                    p.style.setProperty('--ty', Math.sin(angle) * dist + 'px');
-                    
-                    document.body.appendChild(p);
-                    setTimeout(() => p.remove(), 600);
-                }
-            }
-
-            if (loginBtn) {
-                loginBtn.addEventListener("click", () => {
-                    window.auth.signInWithPopup(window.googleProvider)
-                        .then(() => {
-                            showNotification("Thành công", "Đã đăng nhập tài khoản!");
-                        })
-                        .catch(err => showNotification("Lỗi", "Đăng nhập thất bại: " + err.message));
-                });
-            }
-
-            if (logoutBtn) {
-                logoutBtn.addEventListener("click", (e) => {
-                    e.stopPropagation();
-                    window.auth.signOut().then(() => {
-                        logoutPanel.classList.remove("active");
-                        showNotification("Hệ thống", "Đã đăng xuất.");
-                    });
-                });
-            }
-
-            if (userInfo) {
-                userInfo.addEventListener("click", (e) => {
-                    e.stopPropagation();
-                    if (logoutPanel) logoutPanel.classList.toggle("active");
-                });
-            }
-
-            document.addEventListener("click", () => {
-                if (logoutPanel) logoutPanel.classList.remove("active");
-            });
-
-            window.auth.onAuthStateChanged(user => {
-                if (user) {
-                    if (userPhoto) {
-                        userPhoto.src = user.photoURL || "icon-main.png";
-                        
-                        if (!isFirstLoad && loginBtn) {
-                            // Start spin animation on CONTAINER border
-                            const authSection = document.getElementById("user-auth-section");
-                            if (authSection) authSection.classList.add("loading");
-                            
-                            // Wait for spin to finish before swapping
-                            setTimeout(() => {
-                                if (authSection) authSection.classList.remove("loading");
-                                loginBtn.classList.add("hidden");
-                                if (userInfo) userInfo.classList.remove("hidden");
-                                
-                                const rect = userInfo.getBoundingClientRect();
-                                createBurst(rect.left + rect.width/2, rect.top + rect.height/2);
-                            }, 800);
-                        } else {
-                            if (loginBtn) loginBtn.classList.add("hidden");
-                            if (userInfo) userInfo.classList.remove("hidden");
-                        }
-                    }
-                    console.log("User logged in:", user.uid);
-                } else {
-                    if (loginBtn) loginBtn.classList.remove("hidden");
-                    if (userInfo) userInfo.classList.add("hidden");
-
-                    // GUEST MODE: Clear all mindmap data if not logged in
-                    if (!isFirstLoad) {
-                        console.log("Guest mode: Clearing local mindmap data...");
-                        localStorage.removeItem("blank_mindmap_drawings");
-                        
-                        const req = indexedDB.open("MindmapDB", 1);
-                        req.onsuccess = (e) => {
-                            const db = e.target.result;
-                            if (db.objectStoreNames.contains("Elements")) {
-                                const tx = db.transaction("Elements", "readwrite");
-                                tx.objectStore("Elements").clear();
-                                tx.oncomplete = () => {
-                                    setTimeout(() => location.reload(), 500);
-                                };
-                            } else {
-                                setTimeout(() => location.reload(), 500);
-                            }
-                        };
-                    }
-                }
-                isFirstLoad = false;
-            });
-        }
-
-        initializeAuth();
     }
 });
