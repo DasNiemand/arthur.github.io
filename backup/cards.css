@@ -517,7 +517,7 @@ body {
 .url-input-container {
     position: fixed;
     bottom: 55%;
-    right: 74.6%;
+    right: 75%;
     transform: translateX(-50%) translateY(0);
     z-index: 99999;
     opacity: 1;
@@ -1372,4 +1372,21 @@ body {
   border-radius: 7px;
   background: rgb(255, 255, 255);
   transition: 0.5s ease;
+}
+
+/* ── Sweep Select ── */
+.selection-box {
+  position: fixed;
+  border: 1.5px solid #d17842;
+  background-color: rgba(209, 120, 66, 0.08);
+  pointer-events: none;
+  z-index: 10000;
+  display: none;
+  border-radius: 3px;
+}
+
+.card.selected {
+  outline: 3px solid #d17842 !important;
+  box-shadow: 0 0 18px rgba(209,120,66,0.65) !important;
+  transition: outline 0.1s, box-shadow 0.1s;
 }

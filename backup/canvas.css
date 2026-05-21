@@ -1338,7 +1338,7 @@ body {
 
 /* Active State for normal tools */
 .figjam-toolbar .toolbar-item:has(input[name="tool"]:checked) .icon-wrapper {
-  background-color: #333;
+  background-color: #d17842;
 }
 .figjam-toolbar .toolbar-item:has(input[name="tool"]:checked) .icon-wrapper svg {
   color: #fff;
@@ -1375,25 +1375,6 @@ body {
   pointer-events: none;
   z-index: 10000;
   display: none;
-}
-
-.custom-tooltip::before {
-  position: absolute;
-  content: "";
-  width: 8px;
-  height: 8px;
-  background-color: #121212;
-  border-right: 1px solid #333;
-  border-bottom: 1px solid #333;
-  transform: rotate(45deg);
-  bottom: -5px;
-  transition-duration: 0.3s;
-}
-
-.figjam-toolbar .toolbar-item:hover .custom-tooltip {
-  top: -40px;
-  opacity: 1;
-  transition: all 0.3s ease 0.5s;
 }
 
 .figjam-toolbar.sub-active .custom-tooltip {
@@ -1433,10 +1414,37 @@ body {
   height: 100vh;
   z-index: -2;
   background-color: #313131;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.171) 2px, transparent 0);
-  background-size: 30px 30px;
-  background-position: -5px -5px;
   display: none;
+  overflow: hidden;
+}
+
+.dot-background::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--dot-image, none);
+  background-size: var(--dot-size, 30px 30px);
+  background-position: -5px -5px;
+  background-repeat: repeat;
+  opacity: var(--dot-opacity, 0.17);
+  pointer-events: none;
+}
+
+/* Preview tile in settings panel */
+#bg-dot-preview {
+  position: relative;
+  overflow: hidden;
+}
+#bg-dot-preview::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--dot-image, none);
+  background-size: var(--dot-size, 30px 30px);
+  background-position: -5px -5px;
+  background-repeat: repeat;
+  opacity: var(--dot-opacity, 0.17);
+  pointer-events: none;
 }
 
 /* Mindmap Elements */
@@ -1460,8 +1468,8 @@ body {
 }
 
 .sticky-note {
-  width: 200px;
-  min-height: 200px;
+  width: 240px;
+  min-height: 240px;
   background-color: #FFF9B1;
   padding: 16px;
   font-family: 'Courier New', Courier, monospace;
@@ -1473,11 +1481,163 @@ body {
 
 .sticky-note .note-title {
   font-weight: bold;
-  font-size: 1.2em;
-  margin-bottom: 8px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  font-size: 1.1em;
   outline: none;
+}
+
+.sticky-note .note-author {
+  font-size: 0.85em;
+  opacity: 0.6;
+  margin-top: auto;
+  padding-top: 16px;
+  pointer-events: none;
+}
+
+/* Floating Context Toolbar */
+.floating-toolbar {
+  position: fixed;
+  background-color: rgba(18, 18, 18, 0.95);
+  border: 1px solid #333;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  z-index: 9999;
+  gap: 2px;
+  pointer-events: all;
+  transition: opacity 0.15s;
+  will-change: top, left;
+}
+.ft-divider {
+  width: 1px;
+  height: 24px;
+  background-color: rgba(255,255,255,0.1);
+  margin: 0 6px;
+}
+.ft-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  transition: background-color 0.15s;
+}
+.ft-btn:hover {
+  background-color: rgba(255,255,255,0.1);
+}
+.ft-color-circle {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+.ft-user {
+  background-color: transparent !important;
+  padding: 6px 8px;
+  border-radius: 8px;
+  margin-left: 4px;
+}
+.ft-user:hover {
+  background-color: rgba(255,255,255,0.1) !important;
+}
+.ft-user svg {
+  stroke: #aeaeae;
+}
+.ft-user:hover svg {
+  stroke: #fff;
+}
+
+/* ─── FLOATING TOOLBAR SUB-MENUS ─── */
+.ft-sub-menu {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(18,18,18,0.98);
+  border: 1px solid #444;
+  border-radius: 10px;
+  padding: 10px;
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 99999;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  min-width: 140px;
+  white-space: nowrap;
+}
+.ft-sub-menu.open {
+  display: flex;
+}
+
+/* Color palette grid */
+.ft-color-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 5px;
+  padding: 0;
+}
+.ft-color-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform 0.1s, border-color 0.1s;
+}
+.ft-color-swatch:hover {
+  transform: scale(1.2);
+  border-color: rgba(255,255,255,0.5);
+}
+.ft-color-swatch.active {
+  border-color: #fff;
+  transform: scale(1.15);
+}
+
+/* Font & Size options */
+.ft-menu-option {
+  padding: 7px 12px;
+  color: #eee;
+  font-size: 0.875rem;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s;
+  text-align: left;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+}
+.ft-menu-option:hover {
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+}
+.ft-menu-option.active {
+  background: rgba(209,120,66,0.25);
+  color: #d17842;
+}
+
+/* Relative wrapper for ft-btns so sub-menus position correctly */
+.ft-btn-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.text-note {
+  background-color: transparent !important;
+  box-shadow: none !important;
+  border: 1px dashed transparent !important;
+  color: var(--canvas-text-contrast, #000000) !important;
+}
+.text-note:hover, .text-note.selected {
+  border: 1px dashed #d17842 !important;
 }
 
 .sticky-note .note-body {
@@ -1542,9 +1702,16 @@ body {
   transition: transform 0.15s, opacity 0.15s;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
 }
-.sticky-note.selected .connector-dot,
-.image-note.selected .connector-dot,
-#mindmap-workspace.connector-tool .mindmap-element .connector-dot {
+.sticky-note .connector-dot::after,
+.image-note .connector-dot::after {
+  content: "";
+  position: absolute;
+  top: -15px;
+  left: -15px;
+  right: -15px;
+  bottom: -15px;
+}
+#mindmap-workspace.connector-tool .mindmap-element:hover .connector-dot {
   display: block;
 }
 .sticky-note .connector-dot:hover,

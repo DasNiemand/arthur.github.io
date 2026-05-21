@@ -4,17 +4,23 @@ document.addEventListener("DOMContentLoaded", function () {
     // 0. NOTIFICATIONS (Uiverse.io inspired)
     // ------------------------------------------
     function showNotification(title, message) {
-        const container = document.getElementById("notification-container");
-        if (!container) return;
-
-        // Get web icon (main card icon)
-        let iconSrc = getActiveMainCardIcon();
-        if (iconSrc === "default") iconSrc = "icon-main.png";
-
-        const notif = document.createElement("div");
-        notif.className = "notif-card";
+        if (window.globalNotify) {
+            let type = 'info';
+            const t = title.toLowerCase();
+            if (t.includes('lỗi') || t.includes('error')) type = 'error';
+            else if (t.includes('thành công') || t.includes('success')) type = 'success';
+            else if (t.includes('cảnh báo') || t.includes('warning')) type = 'warning';
+            
+            window.globalNotify(type, title, message);
+            return;
+        }
+        
+        // Fallback for isolated testing
+        const container = document.getElementById('notification-container');
+        if (!container) { console.log(title, message); return; }
+        const notif = document.createElement('div');
+        notif.className = 'notif-card';
         notif.innerHTML = `
-            <div class="notif-img" style="background-image: url('${iconSrc}')"></div>
             <div class="notif-text-box">
                 <div class="notif-text-content">
                     <p class="notif-title">${title}</p>
@@ -23,18 +29,13 @@ document.addEventListener("DOMContentLoaded", function () {
                 <p class="notif-message">${message}</p>
             </div>
         `;
-
-        console.log("Showing notification:", title, message);
         container.appendChild(notif);
-
-        // Auto remove
         setTimeout(() => {
-            notif.style.transform = "translateY(-150%)";
-            notif.style.opacity = "0";
+            notif.style.transform = 'translateY(-150%)';
+            notif.style.opacity = '0';
             setTimeout(() => notif.remove(), 500);
-        }, 4000);
-        
-        notif.addEventListener("click", () => notif.remove());
+        }, 4500);
+        notif.addEventListener('click', () => notif.remove());
     }
 
     // ------------------------------------------
@@ -188,26 +189,86 @@ document.addEventListener("DOMContentLoaded", function () {
     // ------------------------------------------
     // 5. BACKGROUND SETTINGS INIT
     // ------------------------------------------
+
+    function buildDotPatternImage(type, color, spacing, scale, uploadedDataUrl) {
+        if (type === 'upload' && uploadedDataUrl) {
+            return `url("${uploadedDataUrl}")`;
+        }
+        const half = spacing / 2;
+        const r = Math.max(1.5, scale / 2);
+        let shapeSvg = '';
+        if (type === 'diamond') {
+            shapeSvg = `<polygon points="${half},${half-r} ${half+r},${half} ${half},${half+r} ${half-r},${half}" fill="${color}"/>`;
+        } else if (type === 'heart') {
+            const hw = r * 0.75;
+            shapeSvg = `<path d="M${half} ${half+r*0.85} C${half-r*1.1} ${half} ${half-r*1.8} ${half-r*0.5} ${half-r*1.1} ${half-r*1.1} A${hw} ${hw} 0 0 1 ${half} ${half-r*0.2} A${hw} ${hw} 0 0 1 ${half+r*1.1} ${half-r*1.1} C${half+r*1.8} ${half-r*0.5} ${half+r*1.1} ${half} ${half} ${half+r*0.85}Z" fill="${color}"/>`;
+        } else if (type === 'star') {
+            const pts = [];
+            for (let i = 0; i < 5; i++) {
+                const oa = (i * 4 * Math.PI / 5) - Math.PI / 2;
+                const ia = oa + 2 * Math.PI / 10;
+                pts.push(`${(half + r * Math.cos(oa)).toFixed(2)},${(half + r * Math.sin(oa)).toFixed(2)}`);
+                pts.push(`${(half + r * 0.42 * Math.cos(ia)).toFixed(2)},${(half + r * 0.42 * Math.sin(ia)).toFixed(2)}`);
+            }
+            shapeSvg = `<polygon points="${pts.join(' ')}" fill="${color}"/>`;
+        } else if (type === 'sparkle') {
+            const pts = [
+                `${half},${half-r}`, `${half+r*0.22},${half-r*0.22}`,
+                `${half+r},${half}`, `${half+r*0.22},${half+r*0.22}`,
+                `${half},${half+r}`, `${half-r*0.22},${half+r*0.22}`,
+                `${half-r},${half}`, `${half-r*0.22},${half-r*0.22}`
+            ].join(' ');
+            shapeSvg = `<polygon points="${pts}" fill="${color}"/>`;
+        } else if (type === 'music') {
+            const nr = r * 0.58;
+            shapeSvg = `
+                <ellipse cx="${half-nr*0.3}" cy="${half+r*0.48}" rx="${nr*0.82}" ry="${nr*0.5}" fill="${color}"/>
+                <rect x="${half+nr*0.48}" y="${half-r*0.82}" width="${nr*0.28}" height="${r*1.3}" fill="${color}"/>
+                <rect x="${half+nr*0.48}" y="${half-r*0.82}" width="${nr*0.9}" height="${nr*0.28}" fill="${color}"/>
+            `;
+        } else {
+            // default: circle
+            return `radial-gradient(${color} ${r.toFixed(1)}px, transparent ${r.toFixed(1)}px)`;
+        }
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${spacing}" height="${spacing}" viewBox="0 0 ${spacing} ${spacing}">${shapeSvg}</svg>`;
+        return `url("data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}")` ;
+    }
+
+    function getContrastColor(hex) {
+        if (!hex) return '#000000';
+        if (hex.indexOf('#') === 0) hex = hex.slice(1);
+        if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+        if (hex.length !== 6) return '#000000';
+        const r = parseInt(hex.slice(0, 2), 16),
+              g = parseInt(hex.slice(2, 4), 16),
+              b = parseInt(hex.slice(4, 6), 16);
+        const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+        return (yiq >= 128) ? '#000000' : '#ffffff';
+    }
+
     async function applyBackgroundSettings() {
-        const mode = getSetting("bg_mode", "video");
-        const brightness = getSetting("bg_brightness", 25);
-        const speed = getSetting("bg_speed", 0.5);
+        const mode = getSetting("canvas_bg_mode", "video");
+        const brightness = getSetting("canvas_bg_brightness", 25);
+        const speed = getSetting("canvas_bg_speed", 0.5);
         
         let customSrc = null;
-        const fileBlob = await getLargeFile("bg_custom_file");
+        const fileBlob = await getLargeFile("canvas_bg_custom_file");
         if (fileBlob) {
             customSrc = URL.createObjectURL(fileBlob);
         } else {
-            customSrc = getSetting("bg_custom_src", null);
+            customSrc = getSetting("canvas_bg_custom_src", null);
         }
         
-        const colors = getSetting("bg_colors", ["#1a1a1a", "#333333"]);
-        const angle = getSetting("bg_color_angle", 45);
+        const colors = getSetting("canvas_bg_colors", ["#1a1a1a", "#333333"]);
+        const angle = getSetting("canvas_bg_color_angle", 45);
 
-        const dotBgColor = getSetting("bg_dot_bg_color", "#313131");
-        const dotColor = getSetting("bg_dot_color", "#ffffff");
-        const dotOpacity = getSetting("bg_dot_opacity", 17);
-        const dotSize = getSetting("bg_dot_size", 30);
+        const dotBgColor = getSetting("canvas_bg_dot_bg_color", "#313131");
+        const dotColor = getSetting("canvas_bg_dot_color", "#ffffff");
+        const dotOpacity = getSetting("canvas_bg_dot_opacity", 17);
+        const dotSpacing = getSetting("canvas_bg_dot_spacing", 30);
+        const dotScale = getSetting("canvas_bg_dot_scale", 15);
+        const dotType = getSetting("canvas_bg_dot_type", "circle");
+        const dotImageData = getSetting("canvas_bg_dot_image_data", null);
 
         const video = document.getElementById("backgroundVideo");
         const prevVideo = document.getElementById("bg-preview-video");
@@ -223,13 +284,6 @@ document.addEventListener("DOMContentLoaded", function () {
             document.body.insertBefore(colorBg, document.body.firstChild);
         }
 
-        // Helper
-        const hexToRgb = (h) => {
-            let hex = h.replace('#', '');
-            if(hex.length===3) hex = hex.split('').map(x=>x+x).join('');
-            return `${parseInt(hex.substring(0,2),16)}, ${parseInt(hex.substring(2,4),16)}, ${parseInt(hex.substring(4,6),16)}`;
-        };
-
         if (mode === "dot") {
             if (video) video.style.display = "none";
             if (prevVideo) prevVideo.style.display = "none";
@@ -238,17 +292,18 @@ document.addEventListener("DOMContentLoaded", function () {
             if (gifBg) gifBg.style.display = "none";
             colorBg.style.display = "none";
             
-            if (dotBg) {
-                dotBg.style.display = "block";
-                dotBg.style.backgroundColor = dotBgColor;
-                dotBg.style.backgroundImage = `radial-gradient(rgba(${hexToRgb(dotColor)}, ${dotOpacity/100}) 2px, transparent 0)`;
-                dotBg.style.backgroundSize = `${dotSize}px ${dotSize}px`;
-            }
-            if (dotPreview) {
-                dotPreview.style.backgroundColor = dotBgColor;
-                dotPreview.style.backgroundImage = `radial-gradient(rgba(${hexToRgb(dotColor)}, ${dotOpacity/100}) 2px, transparent 0)`;
-                dotPreview.style.backgroundSize = `${dotSize}px ${dotSize}px`;
-            }
+            document.body.style.setProperty('--canvas-text-contrast', getContrastColor(dotBgColor));
+
+            const patternImg = buildDotPatternImage(dotType, dotColor, dotSpacing, dotScale, dotImageData);
+            const applyDotStyles = (el) => {
+                if (!el) return;
+                el.style.backgroundColor = dotBgColor;
+                el.style.setProperty('--dot-image', patternImg);
+                el.style.setProperty('--dot-size', `${dotSpacing}px ${dotSpacing}px`);
+                el.style.setProperty('--dot-opacity', dotOpacity / 100);
+            };
+            if (dotBg) { dotBg.style.display = "block"; applyDotStyles(dotBg); }
+            if (dotPreview) applyDotStyles(dotPreview);
         } else if (mode === "color") {
             if (video) video.style.display = "none";
             if (prevVideo) prevVideo.style.display = "none";
@@ -257,6 +312,8 @@ document.addEventListener("DOMContentLoaded", function () {
             if (gifBg) gifBg.style.display = "none";
             if (dotBg) dotBg.style.display = "none";
             
+            document.body.style.setProperty('--canvas-text-contrast', getContrastColor(colors[0]));
+            
             const grad = `linear-gradient(${angle}deg, ${colors.join(', ')})`;
             colorBg.style.display = "block";
             colorBg.style.background = grad;
@@ -264,6 +321,7 @@ document.addEventListener("DOMContentLoaded", function () {
             const p = document.getElementById("bg-color-preview");
             if (p) p.style.background = grad;
         } else {
+            document.body.style.setProperty('--canvas-text-contrast', '#ffffff');
             colorBg.style.display = "none";
             if (dotBg) dotBg.style.display = "none";
             const updateEl = (el, isMain) => {
@@ -295,6 +353,8 @@ document.addEventListener("DOMContentLoaded", function () {
                     const g = document.getElementById("gif-background");
                     if (g) g.style.display = "none";
                 } else if (isImage) {
+                    document.body.style.setProperty('--canvas-text-contrast', '#ffffff');
+                    
                     if (video) video.style.display = "none";
                     if (prevVideo) prevVideo.style.display = "none";
                     if (prevGif) {
@@ -513,7 +573,7 @@ document.addEventListener("DOMContentLoaded", function () {
         saveMindmap();
     }
     const HOVER_BRIGHTNESS = "brightness(25%)";
-    const DEFAULT_BRIGHTNESS = `brightness(${getSetting("bg_brightness", 25)}%)`;
+    const DEFAULT_BRIGHTNESS = `brightness(${getSetting("canvas_bg_brightness", 25)}%)`;
     const BG_TRANSITION = "filter 0.5s ease-in-out";
 
     function addVideoHoverListeners(el) {
@@ -523,7 +583,7 @@ document.addEventListener("DOMContentLoaded", function () {
             backgroundVideo.style.transition = BG_TRANSITION;
         });
         el.addEventListener("mouseout", () => {
-            const br = getSetting("bg_brightness", 25);
+            const br = getSetting("canvas_bg_brightness", 25);
             backgroundVideo.style.filter = `brightness(${br}%)`;
         });
     }
@@ -683,60 +743,10 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         // ------------------------------------------
-        // 11. DOWNLOAD / UPLOAD
+        // 11. DOWNLOAD / UPLOAD (handled by global.js)
         // ------------------------------------------
-        if (downloadCardsBtn) {
-            downloadCardsBtn.addEventListener("click", async (e) => {
-                e.preventDefault();
-                const mindmapElements = await dbGet("blank_mindmap_elements");
-                const drawingsData = localStorage.getItem("blank_mindmap_drawings");
-                if (!mindmapElements && !drawingsData) { showNotification("Lỗi", "Không có dữ liệu."); return; }
-                
-                const backup = {
-                    mindmap_elements: mindmapElements || [],
-                    drawings: drawingsData ? JSON.parse(drawingsData) : null
-                };
-                
-                const blob = new Blob([JSON.stringify(backup)], { type: "application/json" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url; a.download = "mindmap_backup.json";
-                document.body.appendChild(a); a.click();
-                document.body.removeChild(a); URL.revokeObjectURL(url);
-            });
-        }
-        if (uploadCardsTrigger) {
-            uploadCardsTrigger.addEventListener("click", e => {
-                e.preventDefault(); uploadCardsInput.click();
-            });
-        }
-        if (uploadCardsInput) {
-            uploadCardsInput.addEventListener("change", e => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = async ev => {
-                    try {
-                        const uploaded = JSON.parse(ev.target.result);
-                        if (uploaded.mindmap_elements || uploaded.drawings || uploaded.mindmap) {
-                            if (uploaded.mindmap_elements) {
-                                await dbSet("blank_mindmap_elements", uploaded.mindmap_elements);
-                            } else if (uploaded.mindmap) { // Legacy backup
-                                await dbSet("blank_mindmap_elements", uploaded.mindmap);
-                            }
-                            if (uploaded.drawings) {
-                                localStorage.setItem("blank_mindmap_drawings", JSON.stringify(uploaded.drawings));
-                            }
-                            showNotification("Thành công", "Đã khôi phục dữ liệu thành công!");
-                            setTimeout(() => location.reload(), 1000); // Reload to apply the mindmap
-                        } else throw new Error("Dữ liệu không hợp lệ.");
-                    } catch (err) { showNotification("Lỗi", err.message); }
-                    e.target.value = ""; // Reset input so same file can be uploaded again
-                };
-                reader.readAsText(file);
-            });
-        }
     });
+
 
     // ------------------------------------------
     // 12. SETTINGS PANEL
@@ -837,11 +847,11 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function syncSettingsUI() {
-        const mode = getSetting("bg_mode", "video");
-        const br = getSetting("bg_brightness", 25);
-        const sp = getSetting("bg_speed", 0.5);
-        const colors = getSetting("bg_colors", ["#1a1a1a", "#333333"]);
-        const angle = getSetting("bg_color_angle", 45);
+        const mode = getSetting("canvas_bg_mode", "video");
+        const br = getSetting("canvas_bg_brightness", 25);
+        const sp = getSetting("canvas_bg_speed", 0.5);
+        const colors = getSetting("canvas_bg_colors", ["#1a1a1a", "#333333"]);
+        const angle = getSetting("canvas_bg_color_angle", 45);
 
         const brSlider = document.getElementById("bg-brightness-slider");
         const spSlider = document.getElementById("bg-speed-slider");
@@ -874,7 +884,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 inp.addEventListener("input", (e) => {
                     const id = parseInt(e.target.getAttribute("data-idx"));
                     colors[id] = e.target.value;
-                    setSetting("bg_colors", colors);
+                    setSetting("canvas_bg_colors", colors);
                     applyBackgroundSettings();
                 });
             });
@@ -883,7 +893,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 btn.addEventListener("click", (e) => {
                     const id = parseInt(e.target.getAttribute("data-idx"));
                     colors.splice(id, 1);
-                    setSetting("bg_colors", colors);
+                    setSetting("canvas_bg_colors", colors);
                     syncSettingsUI();
                     applyBackgroundSettings();
                 });
@@ -917,18 +927,35 @@ document.addEventListener("DOMContentLoaded", function () {
         const dotSizeSlider = document.getElementById("bg-dot-size");
         const dotSizeVal = document.getElementById("bg-dot-size-val");
 
-        if (dotBgColor) dotBgColor.value = getSetting("bg_dot_bg_color", "#313131");
-        if (dotColor) dotColor.value = getSetting("bg_dot_color", "#ffffff");
+        if (dotBgColor) dotBgColor.value = getSetting("canvas_bg_dot_bg_color", "#313131");
+        if (dotColor) dotColor.value = getSetting("canvas_bg_dot_color", "#ffffff");
+        const dotScaleSlider = document.getElementById("bg-dot-scale");
+        const dotScaleVal = document.getElementById("bg-dot-scale-val");
+        const dotSpacingSlider = document.getElementById("bg-dot-spacing");
+        const dotSpacingVal = document.getElementById("bg-dot-spacing-val");
+
         if (dotOpacitySlider && dotOpacityVal) {
-            const v = getSetting("bg_dot_opacity", 17);
+            const v = getSetting("canvas_bg_dot_opacity", 17);
             dotOpacitySlider.value = v;
             dotOpacityVal.textContent = v;
         }
-        if (dotSizeSlider && dotSizeVal) {
-            const v = getSetting("bg_dot_size", 30);
-            dotSizeSlider.value = v;
-            dotSizeVal.textContent = v;
+        if (dotScaleSlider && dotScaleVal) {
+            const v = getSetting("canvas_bg_dot_scale", 15);
+            dotScaleSlider.value = v;
+            dotScaleVal.textContent = v;
         }
+        if (dotSpacingSlider && dotSpacingVal) {
+            const v = getSetting("canvas_bg_dot_spacing", 30);
+            dotSpacingSlider.value = v;
+            dotSpacingVal.textContent = v;
+        }
+        const dotTypeEl = document.getElementById("bg-dot-type");
+        if (dotTypeEl) dotTypeEl.value = getSetting("canvas_bg_dot_type", "circle");
+        const uploadRow = document.getElementById("bg-dot-upload-row");
+        const colorRow = document.getElementById("bg-dot-color-row");
+        const isUpload = getSetting("canvas_bg_dot_type", "circle") === 'upload';
+        if (uploadRow) uploadRow.style.display = isUpload ? 'flex' : 'none';
+        if (colorRow) colorRow.style.display = isUpload ? 'none' : 'flex';
 
         // Clock UI sync
         const clockSize = document.getElementById("clock-size-slider");
@@ -1013,7 +1040,7 @@ document.addEventListener("DOMContentLoaded", function () {
         bgBrightnessSlider.addEventListener("input", () => {
             const v = parseInt(bgBrightnessSlider.value);
             bgBrightnessVal.textContent = v;
-            setSetting("bg_brightness", v);
+            setSetting("canvas_bg_brightness", v);
             applyBackgroundSettings();
         });
     }
@@ -1025,7 +1052,7 @@ document.addEventListener("DOMContentLoaded", function () {
         bgSpeedSlider.addEventListener("input", () => {
             const v = parseFloat(bgSpeedSlider.value);
             bgSpeedVal.textContent = v.toFixed(1);
-            setSetting("bg_speed", v);
+            setSetting("canvas_bg_speed", v);
             applyBackgroundSettings();
         });
     }
@@ -1041,8 +1068,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
             showNotification("Hệ thống", "Đang xử lý file lớn...");
             try {
-                await saveLargeFile("bg_custom_file", file);
-                localStorage.removeItem("setting_bg_custom_src");
+                await saveLargeFile("canvas_bg_custom_file", file);
+                localStorage.removeItem("setting_canvas_bg_custom_src");
                 applyBackgroundSettings();
                 showNotification("Thành công", "Đã cập nhật hình nền!");
             } catch (err) {
@@ -1056,10 +1083,10 @@ document.addEventListener("DOMContentLoaded", function () {
     const bgResetBtn = document.getElementById("bg-reset-btn");
     if (bgResetBtn) {
         bgResetBtn.addEventListener("click", async () => {
-            setSetting("bg_brightness", 25);
-            setSetting("bg_speed", 0.5);
-            setSetting("bg_custom_src", null);
-            await deleteLargeFile("bg_custom_file");
+            setSetting("canvas_bg_brightness", 25);
+            setSetting("canvas_bg_speed", 0.5);
+            setSetting("canvas_bg_custom_src", null);
+            await deleteLargeFile("canvas_bg_custom_file");
             applyBackgroundSettings();
             syncSettingsUI();
             showNotification("Thành công", "Đã đặt lại nền.");
@@ -1070,21 +1097,21 @@ document.addEventListener("DOMContentLoaded", function () {
     const btnVideo = document.getElementById("bg-mode-video-btn");
     const btnColor = document.getElementById("bg-mode-color-btn");
     if (btnVideo) btnVideo.addEventListener("click", () => {
-        setSetting("bg_mode", "video");
+        setSetting("canvas_bg_mode", "video");
         syncSettingsUI();
         applyBackgroundSettings();
     });
     if (btnColor) btnColor.addEventListener("click", () => {
-        setSetting("bg_mode", "color");
+        setSetting("canvas_bg_mode", "color");
         syncSettingsUI();
         applyBackgroundSettings();
     });
 
     const addColorBtn = document.getElementById("bg-color-add-btn");
     if (addColorBtn) addColorBtn.addEventListener("click", () => {
-        const colors = getSetting("bg_colors", ["#1a1a1a", "#333333"]);
+        const colors = getSetting("canvas_bg_colors", ["#1a1a1a", "#333333"]);
         colors.push("#000000"); // Add black by default
-        setSetting("bg_colors", colors);
+        setSetting("canvas_bg_colors", colors);
         syncSettingsUI();
         applyBackgroundSettings();
     });
@@ -1092,22 +1119,22 @@ document.addEventListener("DOMContentLoaded", function () {
     const angleSlider = document.getElementById("bg-color-angle");
     const angleVal = document.getElementById("bg-color-angle-val");
     if (angleSlider) angleSlider.addEventListener("input", (e) => {
-        setSetting("bg_color_angle", e.target.value);
+        setSetting("canvas_bg_color_angle", e.target.value);
         if(angleVal) angleVal.textContent = e.target.value;
         applyBackgroundSettings();
     });
 
     const btnDot = document.getElementById("bg-mode-dot-btn");
     if (btnDot) btnDot.addEventListener("click", () => {
-        setSetting("bg_mode", "dot");
+        setSetting("canvas_bg_mode", "dot");
         syncSettingsUI();
         applyBackgroundSettings();
     });
 
     const colorResetBtn = document.getElementById("bg-color-reset-btn");
     if (colorResetBtn) colorResetBtn.addEventListener("click", () => {
-        setSetting("bg_colors", ["#1a1a1a", "#333333"]);
-        setSetting("bg_color_angle", 45);
+        setSetting("canvas_bg_colors", ["#1a1a1a", "#333333"]);
+        setSetting("canvas_bg_color_angle", 45);
         syncSettingsUI();
         applyBackgroundSettings();
     });
@@ -1115,41 +1142,104 @@ document.addEventListener("DOMContentLoaded", function () {
     // Dot Settings Listeners
     const dotBgColorInp = document.getElementById("bg-dot-bg-color");
     if (dotBgColorInp) dotBgColorInp.addEventListener("input", (e) => {
-        setSetting("bg_dot_bg_color", e.target.value);
+        setSetting("canvas_bg_dot_bg_color", e.target.value);
         applyBackgroundSettings();
     });
 
     const dotColorInp = document.getElementById("bg-dot-color");
     if (dotColorInp) dotColorInp.addEventListener("input", (e) => {
-        setSetting("bg_dot_color", e.target.value);
+        setSetting("canvas_bg_dot_color", e.target.value);
         applyBackgroundSettings();
     });
 
     const dotOpacitySlider = document.getElementById("bg-dot-opacity");
     const dotOpacityVal = document.getElementById("bg-dot-opacity-val");
     if (dotOpacitySlider) dotOpacitySlider.addEventListener("input", (e) => {
-        setSetting("bg_dot_opacity", parseInt(e.target.value));
+        setSetting("canvas_bg_dot_opacity", parseInt(e.target.value));
         if (dotOpacityVal) dotOpacityVal.textContent = e.target.value;
         applyBackgroundSettings();
     });
 
-    const dotSizeSlider = document.getElementById("bg-dot-size");
-    const dotSizeVal = document.getElementById("bg-dot-size-val");
-    if (dotSizeSlider) dotSizeSlider.addEventListener("input", (e) => {
-        setSetting("bg_dot_size", parseInt(e.target.value));
-        if (dotSizeVal) dotSizeVal.textContent = e.target.value;
+    const dotScaleSlider = document.getElementById("bg-dot-scale");
+    const dotScaleVal = document.getElementById("bg-dot-scale-val");
+    if (dotScaleSlider) dotScaleSlider.addEventListener("input", (e) => {
+        setSetting("canvas_bg_dot_scale", parseInt(e.target.value));
+        if (dotScaleVal) dotScaleVal.textContent = e.target.value;
+        applyBackgroundSettings();
+    });
+
+    const dotSpacingSlider = document.getElementById("bg-dot-spacing");
+    const dotSpacingVal = document.getElementById("bg-dot-spacing-val");
+    if (dotSpacingSlider) dotSpacingSlider.addEventListener("input", (e) => {
+        setSetting("canvas_bg_dot_spacing", parseInt(e.target.value));
+        if (dotSpacingVal) dotSpacingVal.textContent = e.target.value;
         applyBackgroundSettings();
     });
 
     const dotResetBtn = document.getElementById("bg-dot-reset-btn");
     if (dotResetBtn) dotResetBtn.addEventListener("click", () => {
-        setSetting("bg_dot_bg_color", "#313131");
-        setSetting("bg_dot_color", "#ffffff");
-        setSetting("bg_dot_opacity", 17);
-        setSetting("bg_dot_size", 30);
+        setSetting("canvas_bg_dot_bg_color", "#313131");
+        setSetting("canvas_bg_dot_color", "#ffffff");
+        setSetting("canvas_bg_dot_opacity", 17);
+        setSetting("canvas_bg_dot_spacing", 30);
+        setSetting("canvas_bg_dot_scale", 15);
+        setSetting("canvas_bg_dot_type", "circle");
+        setSetting("canvas_bg_dot_image_data", null);
+        const nameEl = document.getElementById("bg-dot-upload-name");
+        if (nameEl) nameEl.textContent = '';
         syncSettingsUI();
         applyBackgroundSettings();
     });
+
+    // Dot type selector
+    const dotTypeEl = document.getElementById("bg-dot-type");
+    if (dotTypeEl) dotTypeEl.addEventListener("change", (e) => {
+        const val = e.target.value;
+        setSetting("canvas_bg_dot_type", val);
+        const uploadRow = document.getElementById("bg-dot-upload-row");
+        const colorRow = document.getElementById("bg-dot-color-row");
+        if (uploadRow) uploadRow.style.display = val === 'upload' ? 'flex' : 'none';
+        if (colorRow) colorRow.style.display = val === 'upload' ? 'none' : 'flex';
+        applyBackgroundSettings();
+    });
+
+    // Dot image upload
+    const dotUploadBtn = document.getElementById("bg-dot-upload-btn");
+    const dotUploadInput = document.getElementById("bg-dot-upload-input");
+    if (dotUploadBtn && dotUploadInput) {
+        dotUploadBtn.addEventListener("click", () => dotUploadInput.click());
+        dotUploadInput.addEventListener("change", (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            // Resize to max 64x64 to keep localStorage quota safe
+            const img = new Image();
+            const reader = new FileReader();
+            reader.onload = (re) => {
+                img.onload = () => {
+                    const maxSz = 64;
+                    const scale = Math.min(1, maxSz / Math.max(img.width, img.height));
+                    const w = Math.round(img.width * scale);
+                    const h = Math.round(img.height * scale);
+                    const tmpCanvas = document.createElement('canvas');
+                    tmpCanvas.width = w; tmpCanvas.height = h;
+                    tmpCanvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    const dataUrl = tmpCanvas.toDataURL('image/png');
+                    try {
+                        setSetting("canvas_bg_dot_image_data", dataUrl);
+                        const nameEl = document.getElementById("bg-dot-upload-name");
+                        if (nameEl) nameEl.textContent = file.name;
+                        applyBackgroundSettings();
+                        showNotification("Thành công", "Đã cập nhật ảnh chấm!");
+                    } catch(err) {
+                        showNotification("Lỗi bộ nhớ", "Ảnh quá lớn, vui lòng dùng ảnh nhỏ hơn.");
+                    }
+                };
+                img.src = re.target.result;
+            };
+            reader.readAsDataURL(file);
+            e.target.value = '';
+        });
+    }
 
     const crtModeCb = document.getElementById("crt-mode-checkbox");
     if (crtModeCb) crtModeCb.addEventListener("change", (e) => {
@@ -2234,6 +2324,14 @@ document.addEventListener("DOMContentLoaded", function () {
                 startResize(e, sticky, e.target.dataset.dir);
                 return;
             }
+
+            // If clicking on an editable area that is already in edit mode, let browser handle text selection
+            const editableTarget = e.target.closest('[contenteditable="true"]');
+            if (editableTarget) {
+                e.stopPropagation(); // prevent canvas pan
+                // Do not start drag - let browser handle text selection naturally
+                return;
+            }
             
             e.stopPropagation();
             
@@ -2269,15 +2367,45 @@ document.addEventListener("DOMContentLoaded", function () {
                 const target = e.target;
                 if (target.classList.contains("note-body") && !sticky.querySelector(".note-title")) {
                     e.preventDefault();
-                    const text = target.innerText;
+                    
+                    let titleText = "";
+                    let bodyText = "";
+                    
+                    const sel = window.getSelection();
+                    if (sel.rangeCount > 0) {
+                        const range = sel.getRangeAt(0);
+                        const preCaretRange = range.cloneRange();
+                        preCaretRange.selectNodeContents(target);
+                        preCaretRange.setEnd(range.endContainer, range.endOffset);
+                        titleText = preCaretRange.toString();
+                        
+                        const postCaretRange = range.cloneRange();
+                        postCaretRange.selectNodeContents(target);
+                        postCaretRange.setStart(range.endContainer, range.endOffset);
+                        bodyText = postCaretRange.toString();
+                    } else {
+                        titleText = target.innerText;
+                    }
+
                     const wrapper = sticky.querySelector(".content-wrapper");
                     if (wrapper) {
                         wrapper.innerHTML = `
-                            <div class="note-title" contenteditable="true" placeholder="Title">${text}</div>
+                            <div class="note-title" contenteditable="true" placeholder="Title"></div>
                             <div class="note-body" contenteditable="true" placeholder="Take a note..."></div>
                         `;
+                        wrapper.querySelector(".note-title").innerText = titleText;
+                        wrapper.querySelector(".note-body").innerText = bodyText;
                         const newBody = wrapper.querySelector(".note-body");
                         newBody.focus();
+                        
+                        // Set cursor to start of body
+                        const newRange = document.createRange();
+                        newRange.setStart(newBody, 0);
+                        newRange.collapse(true);
+                        const newSel = window.getSelection();
+                        newSel.removeAllRanges();
+                        newSel.addRange(newRange);
+                        
                         saveMindmap();
                     }
                 }
@@ -2470,6 +2598,316 @@ document.addEventListener("DOMContentLoaded", function () {
         resizeStartTop = parseFloat(el.dataset.y);
     }
 
+    // Floating toolbar live tracking via requestAnimationFrame
+    let _ftRafId = null;
+    function _floatingToolbarTick() {
+        const tb = document.getElementById("floating-toolbar");
+        if (!tb) { _ftRafId = null; return; }
+
+        if (selectedElements.length > 0) {
+            const el = selectedElements[0];
+            const rect = el.getBoundingClientRect();
+            const tbH = tb.offsetHeight || 44;
+            const tbW = tb.offsetWidth || 200;
+
+            let top  = rect.top - tbH - 24;
+            let left = rect.left + rect.width / 2 - tbW / 2;
+
+            // Clamp so toolbar never goes off-screen
+            if (top < 8) top = rect.bottom + 24;
+            left = Math.max(8, Math.min(left, window.innerWidth - tbW - 8));
+
+            tb.style.top  = top  + "px";
+            tb.style.left = left + "px";
+
+            // Update color circle to match note bg
+            const colorCircle = tb.querySelector('.ft-color-circle');
+            if (colorCircle && el.dataset.type === "sticky") {
+                const bg = el.style.backgroundColor;
+                if (bg && bg !== "transparent") {
+                    colorCircle.style.backgroundColor = bg;
+                    colorCircle.style.borderColor = "rgba(255,255,255,0.2)";
+                } else {
+                    colorCircle.style.backgroundColor = "transparent";
+                    colorCircle.style.borderColor = "#ccc";
+                }
+            }
+
+            if (tb.style.display === "none") tb.style.display = "flex";
+        } else {
+            if (tb.style.display !== "none") tb.style.display = "none";
+        }
+
+        _ftRafId = requestAnimationFrame(_floatingToolbarTick);
+    }
+
+    function startFloatingToolbarTracking() {
+        if (!_ftRafId) _ftRafId = requestAnimationFrame(_floatingToolbarTick);
+    }
+
+    function stopFloatingToolbarTracking() {
+        if (_ftRafId) { cancelAnimationFrame(_ftRafId); _ftRafId = null; }
+        const tb = document.getElementById("floating-toolbar");
+        if (tb) tb.style.display = "none";
+    }
+
+    function updateFloatingToolbar() {
+        // Show/hide based on selection - actual positioning is done by RAF loop
+        const tb = document.getElementById("floating-toolbar");
+        if (!tb) return;
+        if (selectedElements.length > 0) {
+            startFloatingToolbarTracking();
+        } else {
+            stopFloatingToolbarTracking();
+        }
+    }
+
+    // ─── FLOATING TOOLBAR INIT ────────────────────────────────────────────────
+    function initFloatingToolbar() {
+        const NOTE_COLORS = [
+            "#ffeecc","#fff3b0","#c9f0d4","#c8e6c9","#b3d9ff",
+            "#d0d8f0","#ffd6e0","#ffc4c4","#e0c8f0","#f5e0c8",
+            "#eeeeee","#d4d4d4","#aaaaaa","#555555","#222222",
+            "#ff9999","#ffb347","#fffacd","#90ee90","#add8e6",
+        ];
+        const FONTS = [
+            { label: "Inter",       value: "'Inter', sans-serif" },
+            { label: "Serif",       value: "Georgia, serif" },
+            { label: "Mono",        value: "'Courier New', monospace" },
+            { label: "Comic",       value: "'Comic Sans MS', cursive" },
+            { label: "Roboto",      value: "'Roboto', sans-serif" },
+        ];
+        const SIZES = [10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 42, 48];
+
+        // Build color grid
+        const colorGrid = document.getElementById("ft-color-grid");
+        if (colorGrid) {
+            NOTE_COLORS.forEach(color => {
+                const sw = document.createElement("div");
+                sw.className = "ft-color-swatch";
+                sw.style.backgroundColor = color;
+                sw.title = color;
+                sw.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    if (selectedElements.length > 0) {
+                        const el = selectedElements[0];
+                        if (el.dataset.type === "sticky") {
+                            el.style.backgroundColor = color;
+                            const circle = document.getElementById("ft-color-circle");
+                            if (circle) circle.style.backgroundColor = color;
+                            saveMindmap();
+                        }
+                    }
+                    document.getElementById("ft-color-menu").classList.remove("open");
+                });
+                colorGrid.appendChild(sw);
+            });
+        }
+
+        // Build font menu
+        const fontMenu = document.getElementById("ft-font-menu");
+        if (fontMenu) {
+            FONTS.forEach(f => {
+                const btn = document.createElement("button");
+                btn.className = "ft-menu-option";
+                btn.textContent = f.label;
+                btn.style.fontFamily = f.value;
+                btn.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    if (selectedElements.length > 0) {
+                        const el = selectedElements[0];
+                        // Apply to the whole note's content wrapper
+                        const contentEl = el.querySelector(".note-body") || el.querySelector(".content-wrapper");
+                        if (contentEl) {
+                            contentEl.style.fontFamily = f.value;
+                            // Also apply to title if exists
+                            const titleEl = el.querySelector(".note-title");
+                            if (titleEl) titleEl.style.fontFamily = f.value;
+                        }
+                        const label = document.getElementById("ft-font-label");
+                        if (label) label.textContent = f.label;
+                        fontMenu.querySelectorAll(".ft-menu-option").forEach(b => b.classList.remove("active"));
+                        btn.classList.add("active");
+                        saveMindmap();
+                    }
+                    fontMenu.classList.remove("open");
+                });
+                fontMenu.appendChild(btn);
+            });
+        }
+
+        // Build size menu
+        const sizeMenu = document.getElementById("ft-size-menu");
+        if (sizeMenu) {
+            SIZES.forEach(sz => {
+                const btn = document.createElement("button");
+                btn.className = "ft-menu-option";
+                btn.textContent = sz + "px";
+                btn.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    if (selectedElements.length > 0) {
+                        const el = selectedElements[0];
+                        const contentEl = el.querySelector(".note-body") || el.querySelector(".content-wrapper");
+                        if (contentEl) {
+                            contentEl.style.fontSize = sz + "px";
+                            const titleEl = el.querySelector(".note-title");
+                            if (titleEl) titleEl.style.fontSize = sz + "px";
+                        }
+                        const label = document.getElementById("ft-size-label");
+                        if (label) label.textContent = sz;
+                        sizeMenu.querySelectorAll(".ft-menu-option").forEach(b => b.classList.remove("active"));
+                        btn.classList.add("active");
+                        saveMindmap();
+                    }
+                    sizeMenu.classList.remove("open");
+                });
+                sizeMenu.appendChild(btn);
+            });
+        }
+
+        // Helper: close all sub-menus
+        function closeAllMenus() {
+            document.querySelectorAll(".ft-sub-menu").forEach(m => m.classList.remove("open"));
+        }
+
+        // Toggle sub-menus
+        function toggleMenu(menuId, btnId) {
+            const menu = document.getElementById(menuId);
+            const btn  = document.getElementById(btnId);
+            if (!menu || !btn) return;
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const isOpen = menu.classList.contains("open");
+                closeAllMenus();
+                if (!isOpen) menu.classList.add("open");
+            });
+        }
+
+        toggleMenu("ft-color-menu", "ft-color-btn");
+        toggleMenu("ft-font-menu",  "ft-font-btn");
+        toggleMenu("ft-size-menu",  "ft-size-btn");
+
+        // Close menus when clicking outside
+        document.addEventListener("click", (e) => {
+            if (!e.target.closest(".ft-btn-wrapper")) {
+                closeAllMenus();
+            }
+        });
+
+        // Bold
+        const boldBtn = document.getElementById("ft-bold-btn");
+        if (boldBtn) {
+            boldBtn.addEventListener("click", (e) => {
+                e.preventDefault();
+                // If in editing mode, apply to selection; else apply to whole note
+                const sel = window.getSelection();
+                if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+                    document.execCommand("bold", false, null);
+                } else if (selectedElements.length > 0) {
+                    const el = selectedElements[0];
+                    const body = el.querySelector(".note-body");
+                    if (body) {
+                        const cur = body.style.fontWeight;
+                        body.style.fontWeight = (cur === "bold") ? "" : "bold";
+                        saveMindmap();
+                    }
+                }
+            });
+        }
+
+        // Strikethrough
+        const strikeBtn = document.getElementById("ft-strike-btn");
+        if (strikeBtn) {
+            strikeBtn.addEventListener("click", (e) => {
+                e.preventDefault();
+                const sel = window.getSelection();
+                if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+                    document.execCommand("strikeThrough", false, null);
+                } else if (selectedElements.length > 0) {
+                    const el = selectedElements[0];
+                    const body = el.querySelector(".note-body");
+                    if (body) {
+                        const cur = body.style.textDecoration;
+                        body.style.textDecoration = cur.includes("line-through") ? "" : "line-through";
+                        saveMindmap();
+                    }
+                }
+            });
+        }
+
+        // Link
+        const linkBtn = document.getElementById("ft-link-btn");
+        if (linkBtn) {
+            linkBtn.addEventListener("click", (e) => {
+                e.preventDefault();
+                const sel = window.getSelection();
+                if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+                    const url = prompt("Nhập URL:", "https://");
+                    if (url) {
+                        document.execCommand("createLink", false, url);
+                        // Make links open in new tab
+                        const links = document.querySelectorAll(".note-body a, .note-title a");
+                        links.forEach(a => { a.target = "_blank"; a.rel = "noopener noreferrer"; });
+                        saveMindmap();
+                    }
+                } else {
+                    window.globalNotify && window.globalNotify('warning', "Link", "Vui lòng bôi đen đoạn văn bản trước.");
+                }
+            });
+        }
+
+        // List
+        const listBtn = document.getElementById("ft-list-btn");
+        if (listBtn) {
+            listBtn.addEventListener("click", (e) => {
+                e.preventDefault();
+                const sel = window.getSelection();
+                if (sel && sel.rangeCount > 0) {
+                    document.execCommand("insertUnorderedList", false, null);
+                    saveMindmap();
+                } else {
+                    // Focus on note body and then insert list
+                    if (selectedElements.length > 0) {
+                        const body = selectedElements[0].querySelector(".note-body");
+                        if (body) {
+                            body.contentEditable = "true";
+                            body.focus();
+                            document.execCommand("insertUnorderedList", false, null);
+                            saveMindmap();
+                        }
+                    }
+                }
+            });
+        }
+
+        // Author
+        const authorBtn = document.getElementById("ft-author-btn");
+        if (authorBtn) {
+            authorBtn.addEventListener("click", (e) => {
+                e.preventDefault();
+                const username = localStorage.getItem("global_username") || "Ẩn danh";
+                if (selectedElements.length > 0) {
+                    const el = selectedElements[0];
+                    if (el.dataset.type !== "sticky") return;
+
+                    // Remove old author tag if exists
+                    const oldAuthor = el.querySelector(".note-author-tag");
+                    if (oldAuthor) oldAuthor.remove();
+
+                    const wrapper = el.querySelector(".content-wrapper");
+                    if (wrapper) {
+                        const authorDiv = document.createElement("div");
+                        authorDiv.className = "note-author-tag";
+                        authorDiv.style.cssText = "text-align: right; opacity: 0.55; font-size: 0.72em; margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(0,0,0,0.1); pointer-events: none;";
+                        authorDiv.textContent = "— " + username;
+                        wrapper.appendChild(authorDiv);
+                        saveMindmap();
+                    }
+                }
+            });
+        }
+    }
+
     function selectElement(el) {
         // Clear current selection if el is null or not in list
         selectedElements.forEach(item => item.classList.remove("selected"));
@@ -2483,6 +2921,7 @@ document.addEventListener("DOMContentLoaded", function () {
             }
             selectedElements.forEach(item => item.classList.add("selected"));
         }
+        updateFloatingToolbar();
     }
 
     function toggleElementSelection(el) {
@@ -2494,10 +2933,12 @@ document.addEventListener("DOMContentLoaded", function () {
             selectedElements.push(el);
             el.classList.add("selected");
         }
+        updateFloatingToolbar();
     }
 
     function updateWorkspaceTransform() {
         workspace.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+        // RAF loop in _floatingToolbarTick handles toolbar repositioning continuously
         
         // Move the dot background to create parallax/panning effect
         const dotBg = document.getElementById("dot-background");
@@ -2559,7 +3000,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 
                 if (currentTool === "hand") {
                     canvas.style.cursor = "grab";
-                } else if (currentTool === "sticky") {
+                } else if (currentTool === "sticky" || currentTool === "text") {
                     canvas.style.cursor = "crosshair";
                 } else if (currentTool === "marker") {
                     const settings = getMarkerSettings();
@@ -2754,6 +3195,26 @@ document.addEventListener("DOMContentLoaded", function () {
                         selectTool.checked = true;
                         selectTool.dispatchEvent(new Event('change'));
                         selectElement(sticky);
+                    }
+                } else if (currentTool === "text") {
+                    const sticky = createStickyNote(wx, wy, "", Date.now().toString(), "auto", "auto", "transparent");
+                    sticky.classList.add("text-note");
+                    saveMindmap();
+                    
+                    const selectTool = document.querySelector('input[value="select"]');
+                    if(selectTool) {
+                        selectTool.checked = true;
+                        selectTool.dispatchEvent(new Event('change'));
+                        selectElement(sticky);
+                        
+                        // focus text body
+                        setTimeout(() => {
+                            const body = sticky.querySelector('.note-body');
+                            if (body) {
+                                body.contentEditable = "true";
+                                body.focus();
+                            }
+                        }, 50);
                     }
                 } else if (currentTool === "connector") {
                     clearConnectorPreview();
@@ -3051,8 +3512,34 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         });
 
-        renderMindmap();
+        window.addEventListener("paste", function(e) {
+        const target = e.target;
+        if (target.classList.contains("note-body") || target.classList.contains("note-title")) {
+            e.preventDefault();
+            let text = "";
+            if (e.clipboardData || e.originalEvent && e.originalEvent.clipboardData) {
+                text = (e.originalEvent || e).clipboardData.getData('text/plain');
+            } else if (window.clipboardData) {
+                text = window.clipboardData.getData('Text');
+            }
+            if (document.queryCommandSupported('insertText')) {
+                document.execCommand('insertText', false, text);
+            } else {
+                // Fallback for newer browsers if execCommand fails
+                const sel = window.getSelection();
+                if (sel.rangeCount) {
+                    const range = sel.getRangeAt(0);
+                    range.deleteContents();
+                    range.insertNode(document.createTextNode(text));
+                    range.collapse(false);
+                }
+            }
+        }
+    });
+
+    renderMindmap();
         window.renderMindmap = renderMindmap;
         updateWorkspaceTransform();
+        initFloatingToolbar();
     }
 });

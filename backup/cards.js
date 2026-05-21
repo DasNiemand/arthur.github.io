@@ -4,17 +4,23 @@ document.addEventListener("DOMContentLoaded", function () {
     // 0. NOTIFICATIONS (Uiverse.io inspired)
     // ------------------------------------------
     function showNotification(title, message) {
-        const container = document.getElementById("notification-container");
-        if (!container) return;
-
-        // Get web icon (main card icon)
-        let iconSrc = getActiveMainCardIcon();
-        if (iconSrc === "default") iconSrc = "icon-main.png";
-
-        const notif = document.createElement("div");
-        notif.className = "notif-card";
+        if (window.globalNotify) {
+            let type = 'info';
+            const t = title.toLowerCase();
+            if (t.includes('lỗi') || t.includes('error')) type = 'error';
+            else if (t.includes('thành công') || t.includes('success') || t.includes('đã xóa')) type = 'success';
+            else if (t.includes('cảnh báo') || t.includes('warning')) type = 'warning';
+            
+            window.globalNotify(type, title, message);
+            return;
+        }
+        
+        // Fallback for isolated testing
+        const container = document.getElementById('notification-container');
+        if (!container) { console.log(title, message); return; }
+        const notif = document.createElement('div');
+        notif.className = 'notif-card';
         notif.innerHTML = `
-            <div class="notif-img" style="background-image: url('${iconSrc}')"></div>
             <div class="notif-text-box">
                 <div class="notif-text-content">
                     <p class="notif-title">${title}</p>
@@ -23,18 +29,13 @@ document.addEventListener("DOMContentLoaded", function () {
                 <p class="notif-message">${message}</p>
             </div>
         `;
-
-        console.log("Showing notification:", title, message);
         container.appendChild(notif);
-
-        // Auto remove
         setTimeout(() => {
-            notif.style.transform = "translateY(-150%)";
-            notif.style.opacity = "0";
+            notif.style.transform = 'translateY(-150%)';
+            notif.style.opacity = '0';
             setTimeout(() => notif.remove(), 500);
-        }, 4000);
-        
-        notif.addEventListener("click", () => notif.remove());
+        }, 4500);
+        notif.addEventListener('click', () => notif.remove());
     }
 
     // ------------------------------------------
@@ -534,45 +535,9 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     // ------------------------------------------
-    // 11. DOWNLOAD / UPLOAD
+    // 11. DOWNLOAD / UPLOAD (handled by global.js)
     // ------------------------------------------
-    if (downloadCardsBtn) {
-        downloadCardsBtn.addEventListener("click", (e) => {
-            e.preventDefault();
-            const data = localStorage.getItem("cards");
-            if (!data) { showNotification("Lỗi", "Không có dữ liệu thẻ."); return; }
-            const blob = new Blob([data], { type: "application/json" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url; a.download = "cards_backup.json";
-            document.body.appendChild(a); a.click();
-            document.body.removeChild(a); URL.revokeObjectURL(url);
-        });
-    }
-    if (uploadCardsTrigger) {
-        uploadCardsTrigger.addEventListener("click", e => {
-            e.preventDefault(); uploadCardsInput.click();
-        });
-    }
-    if (uploadCardsInput) {
-        uploadCardsInput.addEventListener("change", e => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = ev => {
-                try {
-                    const uploaded = JSON.parse(ev.target.result);
-                    if (Array.isArray(uploaded)) {
-                        localStorage.setItem("cards", JSON.stringify(uploaded));
-                        initializeCardPage();
-                        showNotification("Thành công", "Đã khôi phục dữ liệu thành công!");
-                    } else throw new Error("Dữ liệu không hợp lệ.");
-                } catch (err) { showNotification("Lỗi", err.message); }
-                e.target.value = "";
-            };
-            reader.readAsText(file);
-        });
-    }
+
 
     // ------------------------------------------
     // 12. SETTINGS PANEL
@@ -1637,6 +1602,129 @@ document.addEventListener("DOMContentLoaded", function () {
             navigation.classList.toggle("nav-hidden");
         });
     }
+
+    // ------------------------------------------
+    // SWEEP SELECT (rubber-band select & delete)
+    // ------------------------------------------
+    (function setupSweepSelect() {
+        // Create selection box element
+        const selBox = document.createElement('div');
+        selBox.className = 'selection-box';
+        document.body.appendChild(selBox);
+
+        let isDragging = false;
+        let startX = 0, startY = 0;
+        let selectedCards = [];
+
+        function clearSelection() {
+            selectedCards.forEach(c => c.classList.remove('selected'));
+            selectedCards = [];
+        }
+
+        function getCards() {
+            return Array.from(document.querySelectorAll('#card-wrapper .card:not(#add-new-card)'));
+        }
+
+        function rectsIntersect(ax, ay, aw, ah, bx, by, bw, bh) {
+            return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+        }
+
+        function updateSelection(x1, y1, x2, y2) {
+            const left   = Math.min(x1, x2);
+            const top    = Math.min(y1, y2);
+            const width  = Math.abs(x2 - x1);
+            const height = Math.abs(y2 - y1);
+
+            selBox.style.left   = left + 'px';
+            selBox.style.top    = top + 'px';
+            selBox.style.width  = width + 'px';
+            selBox.style.height = height + 'px';
+
+            selectedCards.forEach(c => c.classList.remove('selected'));
+            selectedCards = [];
+
+            getCards().forEach(card => {
+                const r = card.getBoundingClientRect();
+                if (rectsIntersect(left, top, width, height, r.left, r.top, r.width, r.height)) {
+                    card.classList.add('selected');
+                    selectedCards.push(card);
+                }
+            });
+        }
+
+        // Determine if a click target is a card element or inside settings/modal
+        function isInteractiveTarget(target) {
+            return target.closest('#settings-panel') ||
+                   target.closest('#url-modal') ||
+                   target.closest('.card') ||
+                   target.closest('nav') ||
+                   target.closest('button') ||
+                   target.closest('input') ||
+                   target.closest('select');
+        }
+
+        document.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return;
+            if (isInteractiveTarget(e.target)) return;
+
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+
+            selBox.style.left   = startX + 'px';
+            selBox.style.top    = startY + 'px';
+            selBox.style.width  = '0px';
+            selBox.style.height = '0px';
+            selBox.style.display = 'block';
+            clearSelection();
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            updateSelection(startX, startY, e.clientX, e.clientY);
+        });
+
+        document.addEventListener('mouseup', (e) => {
+            if (!isDragging) return;
+            selBox.style.display = 'none';
+            // Delay resetting isDragging so the subsequent click event doesn't clear the selection
+            setTimeout(() => { isDragging = false; }, 0);
+        });
+
+        // Clear selection when clicking blank area (not drag)
+        document.addEventListener('click', (e) => {
+            if (isDragging) return;
+            if (!e.target.closest('.card') && !e.target.closest('#settings-panel') && !e.target.closest('#url-modal')) {
+                clearSelection();
+            }
+        });
+
+        // Delete / Backspace to remove selected cards
+        document.addEventListener('keydown', (e) => {
+            if ((e.key === 'Delete' || e.key === 'Backspace') && selectedCards.length > 0) {
+                // Only delete if not focused on an input/text field
+                if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) return;
+                const toDelete = [...selectedCards];
+                clearSelection();
+                let remaining = toDelete.length;
+                toDelete.forEach(card => {
+                    card.classList.add('is-deleting');
+                    let removed = false;
+                    const removeIt = () => {
+                        if (removed) return;
+                        removed = true;
+                        card.remove();
+                        remaining--;
+                        if (remaining === 0) saveCards();
+                    };
+                    card.addEventListener('animationend', removeIt, { once: true });
+                    setTimeout(removeIt, 800); // 800ms fallback
+                });
+                showNotification('Đã xóa', `Đã xóa ${toDelete.length} thẻ.`);
+            }
+        });
+    })();
 
     initializeCardPage();
 });
